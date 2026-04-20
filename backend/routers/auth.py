@@ -87,3 +87,35 @@ async def update_profile(
 
     supabase.table("users").update(updates).eq("id", user["id"]).execute()
     return {"status": "updated"}
+
+
+@router.delete("/account")
+async def delete_account(authorization: Optional[str] = Header(None)):
+    """
+    Permanently delete the authenticated user's account and all their data.
+    Cascade deletes handle sessions/errors via FK constraints.
+    After this call the client should sign out and redirect to login.
+    """
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing token")
+    token = authorization.split(" ", 1)[1]
+    user = verify_token(token)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    supabase = get_supabase()
+    user_id = user["id"]
+
+    try:
+        # Delete user profile row (FK cascades remove sessions, errors, learning_plans)
+        supabase.table("users").delete().eq("id", user_id).execute()
+    except Exception:
+        pass  # Row may not exist (new user who never completed onboarding)
+
+    try:
+        # Delete from Supabase Auth — requires service role key
+        supabase.auth.admin.delete_user(user_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Auth deletion failed: {str(e)}")
+
+    return {"status": "deleted"}

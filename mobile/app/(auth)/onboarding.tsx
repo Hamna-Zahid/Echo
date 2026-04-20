@@ -118,6 +118,11 @@ export default function OnboardingScreen() {
 
   return (
     <View style={s.root}>
+      {/* Persistent logo — always visible across all slides */}
+      <View style={s.logoBar}>
+        <EchoLogo size={26} />
+      </View>
+
       <ScrollView
         contentContainerStyle={s.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -190,7 +195,8 @@ const sl = StyleSheet.create({
 // ── Screen styles ────────────────────────────────────────────
 const s = StyleSheet.create({
   root:          { flex: 1, backgroundColor: T.bg },
-  scrollContent: { flexGrow: 1, paddingTop: Platform.OS === 'ios' ? 56 : 44 },
+  logoBar:       { paddingHorizontal: Spacing.screenH, paddingTop: Platform.OS === 'ios' ? 56 : 44, paddingBottom: 12 },
+  scrollContent: { flexGrow: 1 },
 
   dots: { flexDirection: 'row', justifyContent: 'center', gap: 7, paddingVertical: 20 },
   dot:  { height: 7, borderRadius: 999 },

@@ -1,14 +1,24 @@
 import { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  ScrollView, Platform, Alert,
+  ScrollView, Platform, Alert, Linking,
 } from 'react-native';
 import { router } from 'expo-router';
 import { supabase } from '../../services/supabase';
 import { api } from '../../services/api';
-import { T, Fonts, Spacing, Shadow } from '../../constants/tokens';
+import { T, Fonts, Spacing } from '../../constants/tokens';
 import { MicroLabel, ScoreChip, StreakChip } from '../../components/echo/shared';
 import { IconChevronLeft, IconChevronRight } from '../../components/echo/icons';
+
+type RowItem = {
+  label: string;
+  detail?: string;
+  onPress?: () => void;
+  danger?: boolean;
+  muted?: boolean;
+  noChevron?: boolean;
+  isLast?: boolean;
+};
 
 export default function ProfileScreen() {
   const [user, setUser]       = useState<any>(null);
@@ -25,48 +35,137 @@ export default function ProfileScreen() {
     } catch (e) { console.error(e); }
   };
 
+  // ── Handlers ──────────────────────────────────────────────────────────────
+
   const handleSignOut = () => {
     Alert.alert('Sign out', 'Are you sure?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Sign out', style: 'destructive',
-        onPress: async () => { await supabase.auth.signOut(); router.replace('/(auth)/login'); },
+        onPress: async () => {
+          await supabase.auth.signOut();
+          router.replace('/(auth)/login');
+        },
       },
     ]);
   };
 
-  const handle   = user?.email?.split('@')[0] ?? 'Learner';
-  const initial  = handle[0]?.toUpperCase() ?? 'L';
-  const cefr     = profile?.cefr_level;
-  const ielts    = profile?.ielts_score;
-  const streak   = profile?.streak_days || 0;
-  const exam     = profile?.target_exam || 'IELTS';
-  const accent   = profile?.preferred_accent || 'American';
+  const handleForgotPassword = (email: string) => {
+    // Reused from login — kept here for "change password via email" flow
+    if (!email) {
+      Alert.alert('Error', 'No email address on file.');
+      return;
+    }
+    Alert.alert(
+      'Reset password',
+      `Send a password reset link to ${email}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Send link',
+          onPress: async () => {
+            const { error } = await supabase.auth.resetPasswordForEmail(email);
+            if (error) Alert.alert('Error', error.message);
+            else Alert.alert('Sent', 'Check your inbox for a password reset link.');
+          },
+        },
+      ],
+    );
+  };
 
-  const groups = [
+  const handleChangePassword = () => {
+    if (Platform.OS === 'ios') {
+      Alert.prompt(
+        'New password',
+        'Enter your new password (min. 6 characters)',
+        async (newPassword) => {
+          if (!newPassword || newPassword.length < 6) {
+            Alert.alert('Too short', 'Password must be at least 6 characters.');
+            return;
+          }
+          const { error } = await supabase.auth.updateUser({ password: newPassword });
+          if (error) Alert.alert('Error', error.message);
+          else Alert.alert('Done', 'Your password has been updated.');
+        },
+        'secure-text',
+      );
+    } else {
+      // Android: use reset email as the secure alternative
+      const email = user?.email;
+      handleForgotPassword(email);
+    }
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Delete account',
+      'This will permanently delete your account, all sessions, and error history. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete permanently', style: 'destructive',
+          onPress: async () => {
+            try {
+              await api.delete('/auth/account');
+              await supabase.auth.signOut();
+              router.replace('/(auth)/login');
+            } catch (e: any) {
+              Alert.alert('Error', e.message || 'Account deletion failed. Please try again.');
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const handleRateEcho = () => {
+    const url = Platform.OS === 'ios'
+      ? 'https://apps.apple.com/app/echocoach/id0000000000'
+      : 'https://play.google.com/store/apps/details?id=com.echocoach.app';
+    Linking.openURL(url).catch(() =>
+      Alert.alert('Not available', 'App store link not available yet.')
+    );
+  };
+
+  const handlePrivacyPolicy = () => {
+    Linking.openURL('https://echocoach.app/privacy').catch(() =>
+      Alert.alert('Not available', 'Privacy policy link not available yet.')
+    );
+  };
+
+  // ── Derived display values ────────────────────────────────────────────────
+
+  const handle = user?.email?.split('@')[0] ?? 'Learner';
+  const initial = handle[0]?.toUpperCase() ?? 'L';
+  const cefr   = profile?.cefr_level;
+  const ielts  = profile?.ielts_score;
+  const streak = profile?.streak_days || 0;
+  const exam   = profile?.target_exam || 'IELTS';
+  const accentRaw = profile?.preferred_accent || 'american';
+  const accentDisplay = accentRaw.charAt(0).toUpperCase() + accentRaw.slice(1);
+
+  const groups: { section: string; items: RowItem[] }[] = [
     {
       section: 'COACHING PREFERENCES',
       items: [
-        { label: 'Target exam',    detail: exam },
-        { label: 'Target band',    detail: '7.0' },
-        { label: 'Preferred accent', detail: accent.charAt(0).toUpperCase() + accent.slice(1) },
-        { label: 'Session length', detail: '20 min', isLast: true },
+        { label: 'Target exam',      detail: exam },
+        { label: 'Preferred accent', detail: accentDisplay, isLast: true },
       ],
     },
     {
       section: 'ACCOUNT',
       items: [
-        { label: 'Email',           detail: user?.email, noChevron: true },
-        { label: 'Change password', isLast: false },
-        { label: 'Delete account',  danger: true, isLast: true },
+        { label: 'Email',            detail: user?.email, noChevron: true },
+        { label: 'Change password',  onPress: handleChangePassword },
+        { label: 'Delete account',   onPress: handleDeleteAccount, danger: true, isLast: true },
       ],
     },
     {
       section: 'APP',
       items: [
-        { label: 'Rate Echo' },
-        { label: 'Privacy policy' },
-        { label: 'Version 1.0.0', muted: true, isLast: true },
+        { label: 'Rate Echo',        onPress: handleRateEcho },
+        { label: 'Privacy policy',   onPress: handlePrivacyPolicy },
+        { label: 'Version 1.0.0',    muted: true, isLast: true },
       ],
     },
   ];
@@ -89,7 +188,7 @@ export default function ProfileScreen() {
           <Text style={s.avatarText}>{initial}</Text>
         </View>
         <Text style={s.name}>{handle}</Text>
-        <Text style={s.email}>{user?.email}</Text>
+        <Text style={s.emailText}>{user?.email}</Text>
         <View style={s.badgeRow}>
           {cefr  && <ScoreChip score={cefr} />}
           {ielts && <ScoreChip score={ielts} label="IELTS" />}
@@ -102,23 +201,25 @@ export default function ProfileScreen() {
         <View key={g.section} style={{ marginBottom: 22 }}>
           <MicroLabel style={{ marginBottom: 8 }}>{g.section}</MicroLabel>
           <View style={s.groupCard}>
-            {g.items.map((item, idx) => (
+            {g.items.map((item) => (
               <TouchableOpacity
                 key={item.label}
                 style={[s.row, !item.isLast && s.rowBorder]}
-                activeOpacity={(item as any).muted ? 1 : 0.65}
-                onPress={(item as any).danger ? handleSignOut : undefined}>
+                activeOpacity={item.muted ? 1 : 0.65}
+                onPress={item.onPress}
+                disabled={!item.onPress && !item.danger}
+              >
                 <Text style={[
                   s.rowLabel,
-                  (item as any).danger && { color: T.errorText },
-                  (item as any).muted  && { color: T.muted },
+                  item.danger && { color: T.errorText },
+                  item.muted  && { color: T.muted },
                 ]}>
                   {item.label}
                 </Text>
-                {(item as any).detail && (
-                  <Text style={s.rowDetail}>{(item as any).detail}</Text>
+                {item.detail && (
+                  <Text style={s.rowDetail}>{item.detail}</Text>
                 )}
-                {!(item as any).muted && !(item as any).noChevron && (
+                {!item.muted && !item.noChevron && item.onPress && (
                   <IconChevronRight color={T.muted} size={13} />
                 )}
               </TouchableOpacity>
@@ -149,7 +250,7 @@ const s = StyleSheet.create({
   avatar:      { width: 72, height: 72, borderRadius: 999, backgroundColor: T.rose100, borderWidth: 2, borderColor: T.rose200, alignItems: 'center', justifyContent: 'center' },
   avatarText:  { fontFamily: Fonts.bold, fontSize: 26, color: T.rose600, letterSpacing: -1 },
   name:        { fontFamily: Fonts.semibold, fontSize: 17, color: T.charcoal, letterSpacing: -0.3 },
-  email:       { fontFamily: Fonts.regular, fontSize: 13, color: T.muted },
+  emailText:   { fontFamily: Fonts.regular, fontSize: 13, color: T.muted },
   badgeRow:    { flexDirection: 'row', gap: 7, alignItems: 'center', marginTop: 2 },
 
   groupCard: { backgroundColor: T.bg, borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: T.borderStrong },

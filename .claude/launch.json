@@ -4,7 +4,7 @@
     {
       "name": "echo-design",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["serve", "/tmp/echo-design/echo/project", "-p", "3033", "--no-clipboard"],
+      "runtimeArgs": ["serve", "D:/Echo/echocoach/design-preview", "-p", "3033", "--no-clipboard"],
       "port": 3033
     }
   ]

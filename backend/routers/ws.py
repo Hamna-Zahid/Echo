@@ -207,7 +207,7 @@ async def handle_stream_c(
                     new_count = existing.data[0]["recurrence_count"] + 1
                     supabase.table("errors").update({
                         "recurrence_count": new_count,
-                        "last_seen": "now()",
+                        "last_seen": datetime.now(timezone.utc).isoformat(),
                     }).eq("id", err_id).execute()
                 else:
                     supabase.table("errors").insert({
@@ -259,7 +259,7 @@ async def trigger_diagnostic_score(ws: WebSocket, session_id: str, state: dict):
             supabase.table("users").update({
                 "cefr_level": result.get("cefr_level"),
                 "ielts_score": result.get("ielts_equivalent"),
-                "last_active": "now()",
+                "last_active": datetime.now(timezone.utc).isoformat(),
             }).eq("id", state["user_id"]).execute()
 
             # Update session row with all subscores
@@ -288,6 +288,7 @@ async def websocket_session(
     session_id: str,
     token: Optional[str] = Query(None),
     mode: str = Query("training"),
+    accent: Optional[str] = Query(None),
 ):
     # Step 1: Validate JWT
     if not token:
@@ -345,7 +346,7 @@ async def websocket_session(
         "top_recurring_errors": top_errors,
         "tts_is_speaking": False,
         "session_db_id": session_db_id,
-        "preferred_accent": user_data.get("preferred_accent", "american"),
+        "preferred_accent": accent or user_data.get("preferred_accent", "american"),
         "conversation_history": [],
         "session_transcript": "",
     }

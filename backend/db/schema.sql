@@ -8,6 +8,8 @@ create table public.users (
   ielts_score decimal(3,1),
   target_exam text check (target_exam in ('IELTS','TOEFL','INTERVIEW')),
   preferred_accent text default 'american' check (preferred_accent in ('american','british')),
+  goal text,
+  streak_days int default 0,
   created_at timestamptz default now(),
   last_active timestamptz default now()
 );
@@ -19,7 +21,7 @@ create table public.sessions (
   started_at timestamptz default now(),
   ended_at timestamptz,
   duration_seconds int,
-  mode text check (mode in ('diagnostic','training','interview')),
+  mode text check (mode in ('diagnostic','training','interview','conversation','professional','accent')),
   cefr_score text,
   fluency_score decimal(3,1),
   lexical_score decimal(3,1),

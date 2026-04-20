@@ -23,6 +23,11 @@ function getModeIcon(modeId: string, color: string, size = 20) {
   }
 }
 
+const CEFR_SUBTITLE: Record<string, string> = {
+  A1: 'Beginner', A2: 'Elementary', B1: 'Pre-intermediate',
+  B2: 'Upper Intermediate', C1: 'Advanced', C2: 'Mastery',
+};
+
 function getGreeting() {
   const h = new Date().getHours();
   if (h < 12) return 'Good morning,';
@@ -108,13 +113,13 @@ export default function HomeScreen() {
             <View>
               <MicroLabel style={s.levelMicro}>Current Level</MicroLabel>
               <Text style={s.levelCEFR}>{cefr ?? '—'}</Text>
-              <Text style={s.levelCEFRSub}>{cefr ? 'Upper Intermediate' : 'Run diagnostic'}</Text>
+              <Text style={s.levelCEFRSub}>{cefr ? (CEFR_SUBTITLE[cefr] ?? cefr) : 'Run diagnostic'}</Text>
             </View>
             {ielts ? (
               <View style={{ alignItems: 'flex-end' }}>
                 <MicroLabel style={s.levelMicro}>IELTS Est.</MicroLabel>
                 <Text style={s.levelIELTS}>{ielts}</Text>
-                <Text style={s.levelTarget}>Target: 7.0</Text>
+                <Text style={s.levelTarget}>Band 9.0 target</Text>
               </View>
             ) : (
               <View style={{ alignItems: 'flex-end' }}>

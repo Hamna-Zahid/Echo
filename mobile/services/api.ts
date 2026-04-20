@@ -1,6 +1,10 @@
+import { Platform } from 'react-native';
 import { supabase } from './supabase';
 
-const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_HTTP_URL || 'http://localhost:8000';
+let BASE_URL = process.env.EXPO_PUBLIC_BACKEND_HTTP_URL || 'http://localhost:8000';
+if (Platform.OS === 'android' && BASE_URL.includes('localhost')) {
+  BASE_URL = BASE_URL.replace('localhost', '10.0.2.2');
+}
 
 async function getAuthHeaders(): Promise<Record<string, string>> {
   const { data: { session } } = await supabase.auth.getSession();

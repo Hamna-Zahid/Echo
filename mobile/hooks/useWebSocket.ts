@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { Platform } from 'react-native';
 import { supabase } from '../services/supabase';
 
-const WS_BASE = process.env.EXPO_PUBLIC_BACKEND_WS_URL || 'ws://localhost:8000';
+let WS_BASE = process.env.EXPO_PUBLIC_BACKEND_WS_URL || 'ws://localhost:8000';
+if (Platform.OS === 'android' && WS_BASE.includes('localhost')) {
+  WS_BASE = WS_BASE.replace('localhost', '10.0.2.2');
+}
 
 interface UseWebSocketOptions {
   sessionId: string;

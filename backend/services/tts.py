@@ -150,34 +150,47 @@ def _mp3_to_pcm_f32le(
 ) -> list[bytes]:
     """
     Convert MP3 bytes to PCM F32LE chunks.
-    Uses pydub + ffmpeg if available, otherwise uses a pure-python fallback.
+    Uses miniaudio (no ffmpeg required) as primary decoder.
+    Falls back to pydub+ffmpeg if miniaudio unavailable.
     Returns list of raw bytes chunks (each ~200ms of audio).
     """
+    # ── Primary: miniaudio (ships its own codecs, no system deps) ────────────
+    try:
+        import miniaudio
+
+        decoded = miniaudio.decode(
+            mp3_bytes,
+            nchannels=1,
+            sample_rate=target_sample_rate,
+            output_format=miniaudio.SampleFormat.FLOAT32,
+        )
+        f32_bytes = bytes(decoded.samples)
+
+        # Split into ~200ms chunks for streaming behavior
+        chunk_samples = target_sample_rate * chunk_size_ms // 1000
+        chunk_bytes_size = chunk_samples * 4  # 4 bytes per F32 sample
+        return [f32_bytes[i:i+chunk_bytes_size] for i in range(0, len(f32_bytes), chunk_bytes_size)]
+
+    except ImportError:
+        pass  # fall through to pydub
+    except Exception:
+        pass  # fall through to pydub
+
+    # ── Fallback: pydub + ffmpeg ──────────────────────────────────────────────
     try:
         from pydub import AudioSegment
-        import numpy as np
 
         audio = AudioSegment.from_mp3(io.BytesIO(mp3_bytes))
         audio = audio.set_frame_rate(target_sample_rate).set_channels(1)
 
-        # Export as raw PCM 16-bit
         raw_pcm = audio.raw_data
-        # Convert int16 → float32
         samples_i16 = struct.unpack(f"<{len(raw_pcm)//2}h", raw_pcm)
         samples_f32 = [s / 32768.0 for s in samples_i16]
-
-        # Pack as F32LE
         f32_bytes = struct.pack(f"<{len(samples_f32)}f", *samples_f32)
 
-        # Split into ~200ms chunks for streaming behavior
         chunk_samples = target_sample_rate * chunk_size_ms // 1000
-        chunk_bytes = chunk_samples * 4  # 4 bytes per F32 sample
-        return [f32_bytes[i:i+chunk_bytes] for i in range(0, len(f32_bytes), chunk_bytes)]
-
-    except ImportError:
-        # pydub not available — return MP3 as-is wrapped in a single chunk
-        # Mobile client's pcmF32leToWav will fail but at least no crash
-        return [mp3_bytes]
+        chunk_bytes_size = chunk_samples * 4
+        return [f32_bytes[i:i+chunk_bytes_size] for i in range(0, len(f32_bytes), chunk_bytes_size)]
 
     except Exception:
         return [bytes(target_sample_rate * 4)]  # 1s silence

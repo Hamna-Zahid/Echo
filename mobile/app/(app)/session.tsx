@@ -4,7 +4,7 @@ import {
   SafeAreaView, Platform,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
-import { Audio } from 'expo-av';
+import { createAudioPlayer, setAudioModeAsync, AudioPlayer } from 'expo-audio';
 
 import { T, Fonts, Spacing } from '../../constants/tokens';
 import { Waveform, StatusPill, CorrectionCard, type SessionState } from '../../components/echo/shared';
@@ -42,12 +42,11 @@ export default function SessionScreen() {
     while (audioBufferRef.current.length > 0) {
       const chunk = audioBufferRef.current.shift()!;
       try {
-        const sound = new Audio.Sound();
         const wav = pcmF32leToWav(chunk, 24000);
-        await sound.loadAsync({ uri: arrayBufferToDataUri(wav) });
-        await sound.playAsync();
+        const sound = createAudioPlayer(arrayBufferToDataUri(wav));
+        sound.play();
         await waitForPlayback(sound);
-        await sound.unloadAsync();
+        sound.remove();
       } catch (_) {}
     }
     playbackQueueRef.current = false;
@@ -154,7 +153,7 @@ export default function SessionScreen() {
   });
 
   useEffect(() => {
-    Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+    setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true }).catch(() => {});
     startVAD();
     return () => {
       stopVAD();
@@ -266,13 +265,14 @@ function arrayBufferToDataUri(buf: ArrayBuffer): string {
   return `data:audio/wav;base64,${bytesToBase64(new Uint8Array(buf))}`;
 }
 
-function waitForPlayback(sound: Audio.Sound): Promise<void> {
+function waitForPlayback(sound: AudioPlayer): Promise<void> {
   return new Promise(res => {
     // Safety timeout — resolve after 30s even if didJustFinish never fires
     const timeout = setTimeout(res, 30_000);
-    sound.setOnPlaybackStatusUpdate(st => {
+    const sub = sound.addListener('playbackStatusUpdate', st => {
       if (st.isLoaded && st.didJustFinish) {
         clearTimeout(timeout);
+        sub.remove();
         res();
       }
     });

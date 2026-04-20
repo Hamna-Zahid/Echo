@@ -16,7 +16,7 @@
  */
 
 import { useRef, useCallback } from 'react';
-import { Audio } from 'expo-av';
+import { AudioModule, AudioQuality, IOSOutputFormat, requestRecordingPermissionsAsync, setAudioModeAsync, RecorderState } from 'expo-audio';
 
 interface VADOptions {
   onSpeechStart: () => void;
@@ -30,19 +30,19 @@ const POLL_INTERVAL_MS = 32;     // 30fps polling — low enough latency, low CP
 const SILENCE_THRESHOLD_MS = 800; // 800ms of silence → end of utterance
 const SPEECH_DB_THRESHOLD = -35;  // dB above which we consider speech active
 
-const RECORDING_OPTIONS: Audio.RecordingOptions = {
+const RECORDING_OPTIONS = {
   android: {
     extension: '.webm',
-    outputFormat: Audio.AndroidOutputFormat.WEBM,
-    audioEncoder: Audio.AndroidAudioEncoder.DEFAULT,
+    outputFormat: 'webm',
+    audioEncoder: 'default',
     sampleRate: 16000,
     numberOfChannels: 1,
     bitRate: 64000,
   },
   ios: {
     extension: '.wav',
-    outputFormat: Audio.IOSOutputFormat.LINEARPCM,
-    audioQuality: Audio.IOSAudioQuality.HIGH,
+    outputFormat: IOSOutputFormat.LINEARPCM,
+    audioQuality: AudioQuality.HIGH,
     sampleRate: 16000,
     numberOfChannels: 1,
     bitRate: 128000,
@@ -63,7 +63,7 @@ export function useVAD({
   silenceThresholdMs = SILENCE_THRESHOLD_MS,
   speechDbThreshold = SPEECH_DB_THRESHOLD,
 }: VADOptions) {
-  const recordingRef = useRef<Audio.Recording | null>(null);
+  const recordingRef = useRef<any>(null);
   const isSpeakingRef = useRef(false);
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -74,8 +74,8 @@ export function useVAD({
     if (!rec) return new Uint8Array(0);
 
     try {
-      await rec.stopAndUnloadAsync();
-      const uri = rec.getURI();
+      await rec.stop();
+      const uri = rec.uri;
       if (!uri) return new Uint8Array(0);
 
       // Read the recorded file as bytes
@@ -92,12 +92,12 @@ export function useVAD({
   const startNewRecording = useCallback(async () => {
     if (!activeRef.current) return;
     try {
-      const rec = new Audio.Recording();
-      await rec.prepareToRecordAsync({
+      const rec = new AudioModule.AudioRecorder({
         ...RECORDING_OPTIONS,
         isMeteringEnabled: true,
-      });
-      await rec.startAsync();
+      } as any);
+      await rec.prepareToRecordAsync();
+      rec.record();
       recordingRef.current = rec;
     } catch (e) {
       console.warn('VAD: failed to start recording', e);
@@ -119,16 +119,15 @@ export function useVAD({
   const startVAD = useCallback(async () => {
     activeRef.current = true;
 
-    const { granted } = await Audio.requestPermissionsAsync();
+    const { granted } = await requestRecordingPermissionsAsync();
     if (!granted) {
       console.error('VAD: microphone permission denied');
       return;
     }
 
-    await Audio.setAudioModeAsync({
-      allowsRecordingIOS: true,
-      playsInSilentModeIOS: true,
-      staysActiveInBackground: false,
+    await setAudioModeAsync({
+      allowsRecording: true,
+      playsInSilentMode: true,
     });
 
     await startNewRecording();
@@ -138,7 +137,7 @@ export function useVAD({
       if (!activeRef.current || !recordingRef.current) return;
 
       try {
-        const status = await recordingRef.current.getStatusAsync();
+        const status = recordingRef.current.getStatus();
         if (!status.isRecording) return;
 
         const db = status.metering ?? -160;
@@ -181,7 +180,7 @@ export function useVAD({
       silenceTimerRef.current = null;
     }
     if (recordingRef.current) {
-      try { await recordingRef.current.stopAndUnloadAsync(); } catch (_) {}
+      try { await recordingRef.current.stop(); } catch (_) {}
       recordingRef.current = null;
     }
     isSpeakingRef.current = false;

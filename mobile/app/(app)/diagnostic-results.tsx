@@ -47,8 +47,8 @@ export default function DiagnosticResultsScreen() {
     lexical:          params.lexical     ? parseFloat(params.lexical)     : undefined,
     grammar:          params.grammar     ? parseFloat(params.grammar)     : undefined,
     pronunciation:    params.pronunciation ? parseFloat(params.pronunciation) : undefined,
-    strengths:        params.strengths   ? JSON.parse(params.strengths)   : ['Vocabulary range', 'Pronunciation', 'Task response'],
-    weaknesses:       params.weaknesses  ? JSON.parse(params.weaknesses)  : ['Tense consistency', 'Article usage', 'Filler words'],
+    strengths:        params.strengths   ? JSON.parse(params.strengths)   : [],
+    weaknesses:       params.weaknesses  ? JSON.parse(params.weaknesses)  : [],
     learning_plan:    params.learning_plan,
     focus_area:       params.focus_area,
   };
@@ -68,7 +68,7 @@ export default function DiagnosticResultsScreen() {
 
   const cefr     = result.cefr_level  || '—';
   const ielts    = result.ielts_equivalent;
-  const subtitle = CEFR_SUBTITLE[cefr] || 'Intermediate';
+  const subtitle = CEFR_SUBTITLE[cefr] ?? '';
   const weeks    = WEEKS_TO_BAND7[cefr] || 12;
   const ieltsStr = ielts ? (typeof ielts === 'number' ? ielts.toFixed(1) : String(ielts)) : '—';
 
@@ -79,9 +79,9 @@ export default function DiagnosticResultsScreen() {
     { name: 'Pronunciation',       score: result.pronunciation },
   ].filter(c => c.score != null) as { name: string; score: number }[];
 
-  const strengths  = result.strengths  || ['Vocabulary range', 'Pronunciation', 'Task response'];
-  const weaknesses = result.weaknesses || ['Tense consistency', 'Article usage', 'Filler words'];
-  const focusArea  = result.focus_area || 'Article usage';
+  const strengths  = result.strengths  || [];
+  const weaknesses = result.weaknesses || [];
+  const focusArea  = result.focus_area;
 
   return (
     <ScrollView style={s.root} contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
@@ -109,7 +109,7 @@ export default function DiagnosticResultsScreen() {
             <View>
               <MicroLabel style={s.bandMicro}>IELTS Band</MicroLabel>
               <Text style={s.bandIELTS}>{ieltsStr}</Text>
-              <Text style={s.bandSubtext}>{subtitle} · top 40% globally</Text>
+              {subtitle ? <Text style={s.bandSubtext}>{subtitle}</Text> : null}
             </View>
             <View style={{ alignItems: 'flex-end' }}>
               <MicroLabel style={s.bandMicro}>CEFR</MicroLabel>
@@ -156,39 +156,49 @@ export default function DiagnosticResultsScreen() {
           </View>
         )}
 
-        {/* Strengths / Improve grid */}
-        <View style={s.gridRow}>
-          <View style={[s.gridCell, { backgroundColor: '#F0FDF4' }]}>
-            <Text style={[s.gridTitle, { color: T.success }]}>Strengths</Text>
-            {strengths.map((item: string) => (
-              <View key={item} style={s.gridItem}>
-                <IconCheck color={T.success} size={13} />
-                <Text style={s.gridItemText}>{item}</Text>
+        {/* Strengths / Improve grid — only shown when AI returned data */}
+        {(strengths.length > 0 || weaknesses.length > 0) && (
+          <View style={s.gridRow}>
+            {strengths.length > 0 && (
+              <View style={[s.gridCell, { backgroundColor: '#F0FDF4' }]}>
+                <Text style={[s.gridTitle, { color: T.success }]}>Strengths</Text>
+                {strengths.map((item: string) => (
+                  <View key={item} style={s.gridItem}>
+                    <IconCheck color={T.success} size={13} />
+                    <Text style={s.gridItemText}>{item}</Text>
+                  </View>
+                ))}
               </View>
-            ))}
-          </View>
-          <View style={[s.gridCell, { backgroundColor: T.rose50 }]}>
-            <Text style={[s.gridTitle, { color: T.rose500 }]}>Improve</Text>
-            {weaknesses.map((item: string) => (
-              <View key={item} style={s.gridItem}>
-                <IconArrow color={T.rose500} size={13} />
-                <Text style={s.gridItemText}>{item}</Text>
+            )}
+            {weaknesses.length > 0 && (
+              <View style={[s.gridCell, { backgroundColor: T.rose50 }]}>
+                <Text style={[s.gridTitle, { color: T.rose500 }]}>Improve</Text>
+                {weaknesses.map((item: string) => (
+                  <View key={item} style={s.gridItem}>
+                    <IconArrow color={T.rose500} size={13} />
+                    <Text style={s.gridItemText}>{item}</Text>
+                  </View>
+                ))}
               </View>
-            ))}
+            )}
           </View>
-        </View>
+        )}
 
-        {/* Learning plan */}
-        <View style={s.planBox}>
-          <MicroLabel style={{ color: T.rose400, marginBottom: 10 }}>Your Learning Plan</MicroLabel>
-          <Text style={s.planBody}>
-            {result.learning_plan ||
-              `You've completed your diagnostic assessment. Focus on ${focusArea} in your next 3 sessions — it's the fastest path to Band 7.`}
-          </Text>
-          <View style={s.planChip}>
-            <Text style={s.planChipText}>Next focus: {focusArea}</Text>
+        {/* Learning plan — only shown when AI returned data */}
+        {(result.learning_plan || focusArea) && (
+          <View style={s.planBox}>
+            <MicroLabel style={{ color: T.rose400, marginBottom: 10 }}>Your Learning Plan</MicroLabel>
+            <Text style={s.planBody}>
+              {result.learning_plan ||
+                `You've completed your diagnostic assessment. Focus on ${focusArea} in your next 3 sessions — it's the fastest path to Band 7.`}
+            </Text>
+            {focusArea && (
+              <View style={s.planChip}>
+                <Text style={s.planChipText}>Next focus: {focusArea}</Text>
+              </View>
+            )}
           </View>
-        </View>
+        )}
 
         {/* CTA */}
         <EchoButton
