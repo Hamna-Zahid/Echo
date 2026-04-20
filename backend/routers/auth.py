@@ -1,7 +1,8 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Header
+from typing import Optional
 from pydantic import BaseModel
 
-from db.supabase import get_supabase
+from db.supabase import get_supabase, verify_token
 
 router = APIRouter()
 
@@ -58,3 +59,31 @@ async def logout():
     supabase = get_supabase()
     supabase.auth.sign_out()
     return {"status": "logged out"}
+
+
+class ProfileUpdateRequest(BaseModel):
+    cefr_level: Optional[str] = None
+    target_exam: Optional[str] = None
+    preferred_accent: Optional[str] = None
+    goal: Optional[str] = None
+
+
+@router.patch("/profile")
+async def update_profile(
+    req: ProfileUpdateRequest,
+    authorization: Optional[str] = Header(None),
+):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing token")
+    token = authorization.split(" ", 1)[1]
+    user = verify_token(token)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    supabase = get_supabase()
+    updates = {k: v for k, v in req.dict().items() if v is not None}
+    if not updates:
+        return {"status": "no changes"}
+
+    supabase.table("users").update(updates).eq("id", user["id"]).execute()
+    return {"status": "updated"}

@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "echo-design",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["serve", "/tmp/echo-design/echo/project", "-p", "3033", "--no-clipboard"],
+      "port": 3033
+    }
+  ]
+}

@@ -28,8 +28,9 @@ async function request(method: string, path: string, body?: object): Promise<any
 }
 
 export const api = {
-  get: (path: string) => request('GET', path),
-  post: (path: string, body: object) => request('POST', path, body),
-  put: (path: string, body: object) => request('PUT', path, body),
-  delete: (path: string) => request('DELETE', path),
+  get:    (path: string)                => request('GET',    path),
+  post:   (path: string, body: object)  => request('POST',   path, body),
+  put:    (path: string, body: object)  => request('PUT',    path, body),
+  patch:  (path: string, body: object)  => request('PATCH',  path, body),
+  delete: (path: string)                => request('DELETE', path),
 };

@@ -4,6 +4,7 @@ import {
   Animated, Easing, PanResponder, ViewStyle, TextStyle,
   Platform,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { T, Fonts, Radius, Shadow } from '../../constants/tokens';
 import { FlagUS, FlagUK, FlameIcon, EchoLogoMark, IconHome, IconMic, IconChart } from './icons';
@@ -490,6 +491,7 @@ const styles = StyleSheet.create({
 export type BottomTab = 'home' | 'session' | 'progress';
 
 export function BottomTabBar({ active }: { active: BottomTab }) {
+  const insets = useSafeAreaInsets();
   const tabs: { id: BottomTab; label: string }[] = [
     { id: 'home',     label: 'Home' },
     { id: 'session',  label: 'Session' },
@@ -503,7 +505,7 @@ export function BottomTabBar({ active }: { active: BottomTab }) {
   };
 
   return (
-    <View style={bt.bar}>
+    <View style={[bt.bar, { paddingBottom: Math.max(insets.bottom, 8) }]}>
       {tabs.map((tab) => {
         const isCenter = tab.id === 'session';
         const isActive = active === tab.id;
@@ -537,14 +539,13 @@ export function BottomTabBar({ active }: { active: BottomTab }) {
 
 const bt = StyleSheet.create({
   bar: {
-    height: 72 + (Platform.OS === 'ios' ? 0 : 0),
     backgroundColor: '#fff',
     borderTopWidth: 1,
     borderTopColor: T.borderStrong,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
-    paddingBottom: Platform.OS === 'ios' ? 12 : 0,
+    paddingTop: 10,
   },
   tab: {
     flex: 1,

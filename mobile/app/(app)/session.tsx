@@ -114,6 +114,12 @@ export default function SessionScreen() {
           });
           break;
         }
+        case 'session_summary':
+          // Backend confirms graceful session close — nothing extra needed on the client
+          break;
+        case 'error':
+          console.warn('[Session] Server error:', msg.message);
+          break;
       }
     }, []),
   });
@@ -157,6 +163,8 @@ export default function SessionScreen() {
   }, []);
 
   const handleEnd = () => {
+    // Stop mic first to avoid leaving recording running during navigation
+    stopVAD();
     sendMessage({ type: 'session_end' });
     const dbId = sessionDbIdRef.current;
     router.replace({
@@ -260,8 +268,13 @@ function arrayBufferToDataUri(buf: ArrayBuffer): string {
 
 function waitForPlayback(sound: Audio.Sound): Promise<void> {
   return new Promise(res => {
+    // Safety timeout — resolve after 30s even if didJustFinish never fires
+    const timeout = setTimeout(res, 30_000);
     sound.setOnPlaybackStatusUpdate(st => {
-      if (st.isLoaded && st.didJustFinish) res();
+      if (st.isLoaded && st.didJustFinish) {
+        clearTimeout(timeout);
+        res();
+      }
     });
   });
 }

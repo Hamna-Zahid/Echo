@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Echo — Voice AI English Coach</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:100%;height:100%;background:#0a0a0a;overflow:hidden}
+  body{display:flex;align-items:center;justify-content:center;font-family:'Inter',system-ui,sans-serif}
+  input,button{font-family:'Inter',system-ui,sans-serif}
+  #root{display:flex;align-items:center;justify-content:center;width:100%;height:100%}
+  ::-webkit-scrollbar{width:0;height:0}
+
+  /* Background gradient */
+  body::before{content:'';position:fixed;inset:0;
+    background:radial-gradient(ellipse at 30% 50%, rgba(225,29,116,0.12) 0%, transparent 60%),
+               radial-gradient(ellipse at 70% 20%, rgba(139,92,246,0.08) 0%, transparent 50%);
+    pointer-events:none}
+
+  /* Tweaks panel */
+  #tweaks-panel{
+    position:fixed;bottom:20px;right:20px;z-index:9999;
+    background:rgba(10,10,10,0.92);backdrop-filter:blur(20px);
+    border:1px solid rgba(255,255,255,0.1);border-radius:18px;
+    padding:18px;width:252px;display:none;flex-direction:column;gap:14px;
+    box-shadow:0 16px 48px rgba(0,0,0,0.5)}
+  #tweaks-panel.open{display:flex}
+  .tw-title{font-size:13px;font-weight:700;color:#fff;letter-spacing:-0.2px}
+  .tw-label{font-size:10px;font-weight:600;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px}
+  .tw-row{display:flex;gap:6px;flex-wrap:wrap}
+  .tw-btn{flex:1;min-width:fit-content;height:32px;padding:0 10px;border-radius:999px;border:1px solid rgba(255,255,255,0.15);
+    cursor:pointer;font-family:'Inter',system-ui;font-size:11px;font-weight:600;
+    background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.5);transition:all 150ms ease;white-space:nowrap}
+  .tw-btn:hover{background:rgba(255,255,255,0.12);color:rgba(255,255,255,0.8)}
+  .tw-btn.on{background:#E11D74;color:#fff;border-color:transparent;box-shadow:0 2px 8px rgba(225,29,116,0.4)}
+  .tw-divider{height:1px;background:rgba(255,255,255,0.08)}
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<!-- Tweaks Panel -->
+<div id="tweaks-panel">
+  <div style="display:flex;align-items:center;gap:8px">
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6" stroke="rgba(255,255,255,0.5)" strokeWidth="1.2"/><circle cx="7" cy="7" r="2.5" fill="rgba(255,255,255,0.5)"/></svg>
+    <div class="tw-title">Tweaks</div>
+  </div>
+  <div class="tw-divider"></div>
+  <div>
+    <div class="tw-label">Jump to screen</div>
+    <div class="tw-row">
+      <button class="tw-btn on" id="tw-splash" onclick="jumpTo('splash')">Splash</button>
+      <button class="tw-btn" id="tw-onboarding" onclick="jumpTo('onboarding')">Onboard</button>
+      <button class="tw-btn" id="tw-login" onclick="jumpTo('login')">Login</button>
+    </div>
+    <div class="tw-row" style="margin-top:6px">
+      <button class="tw-btn" id="tw-register" onclick="jumpTo('register')">Register</button>
+      <button class="tw-btn" id="tw-post-reg" onclick="jumpTo('post-reg')">Setup</button>
+      <button class="tw-btn" id="tw-home" onclick="jumpTo('home')">Home</button>
+    </div>
+    <div class="tw-row" style="margin-top:6px">
+      <button class="tw-btn" id="tw-session" onclick="jumpTo('session')">Session</button>
+      <button class="tw-btn" id="tw-session-end" onclick="jumpTo('session-end')">End</button>
+      <button class="tw-btn" id="tw-diagnostic" onclick="jumpTo('diagnostic')">Diagnostic</button>
+    </div>
+    <div class="tw-row" style="margin-top:6px">
+      <button class="tw-btn" id="tw-progress" onclick="jumpTo('progress')">Progress</button>
+      <button class="tw-btn" id="tw-error-detail" onclick="jumpTo('error-detail')">Error</button>
+      <button class="tw-btn" id="tw-profile" onclick="jumpTo('profile')">Profile</button>
+    </div>
+  </div>
+  <div class="tw-divider"></div>
+  <div>
+    <div class="tw-label">Session mode</div>
+    <div class="tw-row">
+      <button class="tw-btn on" id="tw-mode-ielts" onclick="setMode('IELTS Training')">IELTS</button>
+      <button class="tw-btn" id="tw-mode-interview" onclick="setMode('Interview Prep')">Interview</button>
+      <button class="tw-btn" id="tw-mode-accent" onclick="setMode('Accent Training')">Accent</button>
+    </div>
+  </div>
+</div>
+
+<script type="text/babel" src="echo-shared.jsx"></script>
+<script type="text/babel" src="echo-screens-onboarding.jsx"></script>
+<script type="text/babel" src="echo-screens-home.jsx"></script>
+<script type="text/babel" src="echo-screens-session.jsx"></script>
+<script type="text/babel" src="echo-screens-results.jsx"></script>
+
+<script type="text/babel">
+
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "startScreen": "splash",
+  "sessionMode": "IELTS Training"
+}/*EDITMODE-END*/;
+
+// ── Transition directions ──────────────────────────────────────
+const TRANSITIONS = {
+  'splash→onboarding':      'fade',
+  'onboarding→register':    'slideUp',
+  'onboarding→login':       'slideUp',
+  'register→post-reg':      'slideUp',
+  'login→home':             'slideUp',
+  'post-reg→home':          'slideUp',
+  'home→pre-session':       'slideUp',
+  'pre-session→session':    'slideUp',
+  'session→session-end':    'slideUp',
+  'session-end→diagnostic': 'slideUp',
+  'session-end→pre-session':'slideDown',
+  'session-end→home':       'slideDown',
+  'home→progress':          'fade',
+  'home→profile':           'slideLeft',
+  'home→diagnostic':        'slideLeft',
+  'progress→error-detail':  'slideLeft',
+};
+
+function getTransition(from, to) {
+  return TRANSITIONS[`${from}→${to}`] || 'fade';
+}
+
+// ── Device shell ──────────────────────────────────────────────
+function DeviceShell({ children }) {
+  const W = 393, H = 852;
+  const [scale, setScale] = React.useState(1);
+  React.useEffect(() => {
+    const calc = () => setScale(Math.min((window.innerWidth - 32) / W, (window.innerHeight - 32) / H, 1.08));
+    calc();
+    window.addEventListener('resize', calc);
+    return () => window.removeEventListener('resize', calc);
+  }, []);
+  return (
+    <div style={{
+      width: W, height: H, transform: `scale(${scale})`, transformOrigin: 'center center',
+      borderRadius: 52, overflow: 'hidden', flexShrink: 0,
+      boxShadow: '0 0 0 1px rgba(255,255,255,0.07), 0 56px 112px rgba(0,0,0,0.7)',
+      background: '#fff', display: 'flex', flexDirection: 'column', position: 'relative',
+    }}>
+      {/* Dynamic island */}
+      <div style={{ position:'absolute', top:12, left:'50%', transform:'translateX(-50%)', width:122, height:36, borderRadius:20, background:'#000', zIndex:100, pointerEvents:'none' }} />
+      {/* Status bar */}
+      <div style={{ position:'absolute', top:0, left:0, right:0, height:54, zIndex:90, display:'flex', alignItems:'flex-end', justifyContent:'space-between', padding:'0 26px 9px', pointerEvents:'none' }}>
+        <span style={{ fontFamily:'Inter,system-ui', fontSize:15, fontWeight:600, color:'#111' }}>9:41</span>
+        <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+          <svg width="17" height="12" viewBox="0 0 17 12">{[0,3.6,7.2,10.8].map((x,i)=><rect key={i} x={x} y={12-(i+1)*2.8} width="2.4" height={(i+1)*2.8} rx="0.7" fill="#111"/>)}</svg>
+          <svg width="16" height="11" viewBox="0 0 16 11" fill="none">
+            <path d="M8 8.5a1.2 1.2 0 110 2.5 1.2 1.2 0 010-2.5z" fill="#111"/>
+            <path d="M4.8 5.8A4.5 4.5 0 0111.2 5.8" stroke="#111" strokeWidth="1.4" strokeLinecap="round"/>
+            <path d="M2 3A7.5 7.5 0 0114 3" stroke="#111" strokeWidth="1.4" strokeLinecap="round"/>
+          </svg>
+          <svg width="26" height="12" viewBox="0 0 26 12">
+            <rect x="0.5" y="0.5" width="21" height="11" rx="3" stroke="#111" strokeOpacity="0.35"/>
+            <rect x="2" y="2" width="17" height="8" rx="1.5" fill="#111"/>
+            <path d="M23.5 4v4c.7-.4 1.2-1 1.2-2s-.5-1.6-1.2-2z" fill="#111" fillOpacity="0.4"/>
+          </svg>
+        </div>
+      </div>
+      {/* Status bar spacer */}
+      <div style={{ height:54, flexShrink:0 }} />
+      {/* Content */}
+      <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden' }}>
+        {children}
+      </div>
+      {/* Home indicator */}
+      <div style={{ position:'absolute', bottom:8, left:'50%', transform:'translateX(-50%)', width:134, height:5, borderRadius:999, background:'rgba(0,0,0,0.18)', zIndex:100, pointerEvents:'none' }} />
+    </div>
+  );
+}
+
+// ── Screen transition wrapper ─────────────────────────────────
+function ScreenTransition({ children, screenKey, type = 'fade' }) {
+  const [phase, setPhase] = React.useState('in');
+  React.useEffect(() => {
+    setPhase('entering');
+    const id = requestAnimationFrame(() => requestAnimationFrame(() => setPhase('in')));
+    return () => cancelAnimationFrame(id);
+  }, [screenKey]);
+  const transforms = {
+    fade:      { entering: 'opacity:0', in: 'opacity:1' },
+    slideUp:   { entering: 'opacity:0;transform:translateY(28px)', in: 'opacity:1;transform:translateY(0)' },
+    slideDown: { entering: 'opacity:0;transform:translateY(-20px)', in: 'opacity:1;transform:translateY(0)' },
+    slideLeft: { entering: 'opacity:0;transform:translateX(24px)', in: 'opacity:1;transform:translateX(0)' },
+  };
+  const style = transforms[type] || transforms.fade;
+  const cssText = phase === 'entering' ? style.entering : style.in;
+  const cssObj = Object.fromEntries(cssText.split(';').filter(Boolean).map(p => {
+    const [k, ...vs] = p.split(':');
+    return [k.trim().replace(/-([a-z])/g, (_, c) => c.toUpperCase()), vs.join(':').trim()];
+  }));
+  return (
+    <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden', transition: 'opacity 200ms ease, transform 220ms cubic-bezier(0.34,1.1,0.64,1)', ...cssObj }}>
+      {children}
+    </div>
+  );
+}
+
+// ── App ───────────────────────────────────────────────────────
+function App() {
+  const saved = localStorage.getItem('echo_screen_v2');
+  const [screen, setScreenState] = React.useState(saved || TWEAK_DEFAULTS.startScreen);
+  const [prevScreen, setPrevScreen] = React.useState(null);
+  const [sessionMode, setSessionMode] = React.useState(TWEAK_DEFAULTS.sessionMode);
+  const [selectedError, setSelectedError] = React.useState(null);
+  const [transType, setTransType] = React.useState('fade');
+
+  const navigate = React.useCallback((to, opts = {}) => {
+    const transition = getTransition(screen, to);
+    setTransType(transition);
+    if (opts.mode) setSessionMode(opts.mode);
+    if (opts.error) setSelectedError(opts.error);
+    setPrevScreen(screen);
+    setScreenState(to);
+    localStorage.setItem('echo_screen_v2', to);
+    // sync tweaks
+    updateTweakButtons(to);
+  }, [screen]);
+
+  function updateTweakButtons(s) {
+    document.querySelectorAll('.tw-btn[id^="tw-"]').forEach(b => {
+      const id = b.id.replace('tw-', '');
+      b.classList.toggle('on', id === s);
+    });
+  }
+
+  React.useEffect(() => {
+    window.jumpTo = (s) => navigate(s);
+    window.setMode = (m) => {
+      setSessionMode(m);
+      ['ielts','interview','accent'].forEach(k => {
+        const el = document.getElementById(`tw-mode-${k}`);
+        if (el) el.classList.toggle('on', m.toLowerCase().startsWith(k === 'ielts' ? 'ielts' : k === 'interview' ? 'interview' : 'accent'));
+      });
+    };
+    updateTweakButtons(screen);
+  }, [navigate, screen]);
+
+  React.useEffect(() => {
+    const handler = e => {
+      if (e.data?.type === '__activate_edit_mode')   document.getElementById('tweaks-panel').classList.add('open');
+      if (e.data?.type === '__deactivate_edit_mode') document.getElementById('tweaks-panel').classList.remove('open');
+    };
+    window.addEventListener('message', handler);
+    window.parent.postMessage({ type: '__edit_mode_available' }, '*');
+    return () => window.removeEventListener('message', handler);
+  }, []);
+
+  // ── Render screens ──────────────────────────────────────────
+  const bottomNavScreens = ['home', 'progress'];
+  const hasBottomNav = bottomNavScreens.includes(screen);
+
+  const renderContent = () => {
+    switch (screen) {
+      case 'splash':
+        return <SplashScreen onDone={() => navigate('onboarding')} />;
+      case 'onboarding':
+        return <OnboardingScreen onDone={dest => navigate(dest)} />;
+      case 'login':
+        return <LoginScreen onDone={() => navigate('home')} onRegister={() => navigate('register')} />;
+      case 'register':
+        return <RegisterScreen onDone={() => navigate('post-reg')} onLogin={() => navigate('login')} />;
+      case 'post-reg':
+        return <PostRegistrationScreen onDone={() => navigate('home')} />;
+      case 'home':
+        return <HomeScreen onNavigate={navigate} />;
+      case 'pre-session':
+        return <PreSessionScreen mode={sessionMode} onBegin={() => navigate('session')} onClose={() => navigate('home')} />;
+      case 'session':
+        return <SessionScreen mode={sessionMode} onEnd={() => navigate('session-end')} />;
+      case 'session-end':
+        return <SessionEndScreen onViewReport={() => navigate('diagnostic')} onStartAnother={() => navigate('pre-session')} onHome={() => navigate('home')} />;
+      case 'diagnostic':
+        return <DiagnosticScreen onBack={() => navigate('home')} onStartTraining={() => navigate('pre-session', { mode: 'IELTS Training' })} />;
+      case 'progress':
+        return <ProgressScreen onNavigate={navigate} onErrorDetail={(err) => navigate('error-detail', { error: err })} />;
+      case 'error-detail':
+        return <ErrorDetailScreen error={selectedError || { type: 'TENSE', count: 7 }} onBack={() => navigate('progress')} />;
+      case 'profile':
+        return <ProfileScreen onBack={() => navigate('home')} onSignOut={() => { localStorage.removeItem('echo_screen_v2'); navigate('splash'); }} />;
+      default:
+        return <SplashScreen onDone={() => navigate('onboarding')} />;
+    }
+  };
+
+  const tabNav = (tab) => {
+    if (tab === 'home') navigate('home');
+    else if (tab === 'session') navigate('pre-session');
+    else if (tab === 'progress') navigate('progress');
+  };
+
+  const activeTab = screen === 'progress' ? 'progress' : 'home';
+
+  return (
+    <DeviceShell>
+      <ScreenTransition screenKey={screen} type={transType}>
+        {hasBottomNav ? (
+          <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden' }}>
+            <div style={{ flex:1, overflow:'hidden', display:'flex', flexDirection:'column' }}>
+              {renderContent()}
+            </div>
+            <BottomTabBar active={activeTab} onNavigate={tabNav} />
+          </div>
+        ) : renderContent()}
+      </ScreenTransition>
+    </DeviceShell>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

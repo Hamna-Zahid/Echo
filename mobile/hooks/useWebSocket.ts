@@ -53,7 +53,7 @@ export function useWebSocket({ sessionId, mode, accent, onMessage }: UseWebSocke
         }, 2000);
       }
     };
-  }, [sessionId, mode, onMessage]);
+  }, [sessionId, mode, accent, onMessage]);
 
   useEffect(() => {
     mountedRef.current = true;

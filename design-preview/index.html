@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EchoCoach — Design Preview</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #05090F;
+    --surface:  #0C1322;
+    --surface2: #111B2E;
+    --border:   #1A2840;
+    --borderMid:#1E3256;
+    --blue900:  #1E3A8A;
+    --blue700:  #1D4ED8;
+    --blue600:  #2563EB;
+    --blue400:  #60A5FA;
+    --blue300:  #93C5FD;
+    --text:     #E2E8F0;
+    --textSub:  #8896A8;
+    --textDim:  #3D5068;
+    --cyan:     #22D3EE;
+    --success:  #34D399;
+    --error:    #F43F5E;
+    --warning:  #F59E0B;
+    --gold:     #FBBF24;
+  }
+
+  body {
+    background: #020509;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+    color: var(--text);
+    overflow-x: hidden;
+  }
+
+  /* ── Navigation bar ── */
+  .nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    background: rgba(2,5,9,0.92); backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 12px 16px;
+    flex-wrap: wrap;
+  }
+  .nav-btn {
+    padding: 7px 14px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--surface); color: var(--textSub); font-size: 12px;
+    font-weight: 600; cursor: pointer; letter-spacing: 0.3px;
+    transition: all 0.18s ease; white-space: nowrap;
+  }
+  .nav-btn:hover { border-color: var(--blue600); color: var(--blue400); }
+  .nav-btn.active { background: var(--blue600); border-color: var(--blue600); color: #fff; }
+  .nav-label { color: var(--textDim); font-size: 11px; font-weight: 700; letter-spacing: 1px; padding: 0 8px; }
+
+  /* ── Phone frame ── */
+  .stage {
+    margin-top: 72px;
+    padding: 40px 20px 60px;
+    display: flex; gap: 32px; align-items: flex-start; justify-content: center;
+    flex-wrap: wrap;
+  }
+  .phone-wrap { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  .phone-label { font-size: 11px; color: var(--textDim); letter-spacing: 0.8px; font-weight: 600; text-transform: uppercase; }
+  .phone {
+    width: 375px; height: 812px;
+    background: var(--bg);
+    border-radius: 50px;
+    border: 1.5px solid #1a2840;
+    overflow: hidden;
+    position: relative;
+    box-shadow:
+      0 0 0 1px #0a0f1a,
+      0 40px 120px rgba(0,0,0,0.8),
+      0 0 60px rgba(37,99,235,0.06);
+  }
+  .phone-notch {
+    position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+    width: 120px; height: 34px;
+    background: #020509;
+    border-radius: 0 0 18px 18px;
+    z-index: 50;
+  }
+  .screen {
+    position: absolute; inset: 0;
+    display: none;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--bg);
+  }
+  .screen.visible { display: flex; }
+
+  /* ══════════════════════════════════════════
+     SCREEN 1 — LOGIN
+  ══════════════════════════════════════════ */
+  .login-screen {
+    padding: 80px 28px 40px;
+    justify-content: center;
+  }
+  .logo-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .logo-mark {
+    width: 30px; height: 30px; border-radius: 9px;
+    background: var(--blue600);
+    box-shadow: 0 0 20px rgba(37,99,235,0.6);
+    position: relative;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .logo-mark::after {
+    content: '';
+    width: 14px; height: 14px;
+    border: 2px solid rgba(255,255,255,0.6);
+    border-radius: 50%;
+    border-top-color: transparent;
+    animation: spin 2s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .logo-text { font-size: 28px; font-weight: 800; color: var(--text); letter-spacing: -0.5px; }
+  .logo-sub { font-size: 13px; color: var(--textSub); margin-bottom: 36px; }
+  .divider { height: 1px; background: var(--border); margin-bottom: 28px; }
+  .field-label {
+    font-size: 10px; font-weight: 700; color: var(--textSub);
+    letter-spacing: 1px; text-transform: uppercase; margin-bottom: 8px;
+  }
+  .input {
+    width: 100%; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px; color: var(--text); font-size: 15px;
+    margin-bottom: 20px; outline: none;
+    transition: border-color 0.2s;
+  }
+  .input:focus { border-color: var(--blue600); }
+  .input::placeholder { color: var(--textDim); }
+  .btn-primary {
+    width: 100%; background: var(--blue600); border: none; border-radius: 12px;
+    padding: 15px; color: #fff; font-size: 15px; font-weight: 700;
+    cursor: pointer; margin-top: 4px; margin-bottom: 20px;
+    letter-spacing: 0.2px;
+    box-shadow: 0 4px 24px rgba(37,99,235,0.4);
+    transition: all 0.18s ease;
+  }
+  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 32px rgba(37,99,235,0.55); }
+  .link-row { display: flex; justify-content: center; gap: 4px; }
+  .link { color: var(--textSub); font-size: 13px; }
+  .link-hi { color: var(--blue400); font-weight: 600; cursor: pointer; }
+
+  /* ══════════════════════════════════════════
+     SCREEN 2 — HOME
+  ══════════════════════════════════════════ */
+  .home-screen { padding: 56px 22px 24px; gap: 0; overflow-y: auto; }
+  .home-header {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    margin-bottom: 24px;
+  }
+  .greeting { font-size: 12px; color: var(--textDim); margin-bottom: 3px; }
+  .handle { font-size: 20px; font-weight: 700; color: var(--text); }
+  .pill-btn {
+    padding: 7px 14px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--surface); color: var(--textSub); font-size: 12px;
+    font-weight: 500; cursor: pointer;
+  }
+
+  /* CEFR card */
+  .cefr-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 18px; padding: 22px; margin-bottom: 28px;
+    display: flex; justify-content: space-between; align-items: center;
+    position: relative; overflow: hidden;
+  }
+  .cefr-card::before {
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+    background: var(--blue600);
+    border-radius: 18px 0 0 18px;
+  }
+  .cefr-card-glow {
+    position: absolute; right: -20px; top: -20px; width: 120px; height: 120px;
+    background: radial-gradient(circle, rgba(37,99,235,0.12) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .cefr-lbl { font-size: 10px; color: var(--textDim); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 6px; }
+  .cefr-val { font-size: 44px; font-weight: 800; color: var(--text); letter-spacing: -2px; line-height: 1; margin-bottom: 4px; }
+  .cefr-sub { font-size: 12px; color: var(--textSub); }
+  .ielts-box { text-align: right; }
+  .ielts-lbl { font-size: 10px; color: var(--textDim); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 4px; }
+  .ielts-val { font-size: 36px; font-weight: 800; color: var(--blue400); letter-spacing: -1px; }
+
+  /* Section title */
+  .section-title { font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 14px; letter-spacing: -0.2px; }
+
+  /* Mode cards */
+  .modes { display: flex; flex-direction: column; gap: 1px; border-radius: 16px; overflow: hidden; background: var(--border); margin-bottom: 28px; }
+  .mode-row {
+    background: var(--surface); padding: 16px;
+    display: flex; align-items: center; gap: 12px;
+    cursor: pointer; transition: background 0.15s;
+  }
+  .mode-row:hover { background: var(--surface2); }
+  .mode-accent { width: 3px; height: 36px; border-radius: 2px; flex-shrink: 0; }
+  .mode-body { flex: 1; }
+  .mode-head { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; }
+  .mode-name { font-size: 15px; font-weight: 700; color: var(--text); }
+  .mode-tag {
+    padding: 2px 8px; border-radius: 6px; border: 1px solid;
+    font-size: 10px; font-weight: 700; letter-spacing: 0.4px;
+  }
+  .mode-desc { font-size: 12px; color: var(--textSub); }
+  .mode-arrow { font-size: 20px; }
+
+  /* Recent sessions */
+  .session-rows { display: flex; flex-direction: column; }
+  .sess-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 13px 0; border-bottom: 1px solid var(--border);
+  }
+  .sess-mode { font-size: 10px; font-weight: 700; color: var(--blue400); letter-spacing: 0.8px; margin-bottom: 3px; }
+  .sess-date { font-size: 12px; color: var(--textSub); }
+  .sess-chips { display: flex; gap: 6px; }
+  .score-chip {
+    padding: 4px 10px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 6px; font-size: 12px; font-weight: 700; color: var(--blue400);
+    display: flex; gap: 3px; align-items: center;
+  }
+  .score-chip span:first-child { color: var(--textDim); font-weight: 400; }
+
+  /* ══════════════════════════════════════════
+     SCREEN 3 — SESSION (IDLE)
+  ══════════════════════════════════════════ */
+  .session-screen { flex-direction: column; }
+  .session-topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 52px 20px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .end-btn {
+    padding: 7px 14px; border-radius: 8px;
+    border: 1px solid rgba(244,63,94,0.4);
+    background: rgba(244,63,94,0.08);
+    color: var(--error); font-size: 12px; font-weight: 600;
+    cursor: pointer;
+  }
+  .mode-tag-top {
+    padding: 5px 12px; border-radius: 8px; background: var(--surface);
+    border: 1px solid var(--border); font-size: 10px; font-weight: 700;
+    color: var(--textDim); letter-spacing: 1px;
+  }
+  .timer { font-size: 14px; color: var(--textDim); font-variant-numeric: tabular-nums; min-width: 40px; text-align: right; }
+
+  /* Waveform area */
+  .wave-area {
+    flex: 1; display: flex; flex-direction: column;
+    justify-content: center; align-items: center; gap: 36px;
+    position: relative;
+  }
+  /* Radial glow behind waveform */
+  .wave-glow {
+    position: absolute; width: 300px; height: 200px;
+    border-radius: 50%;
+    pointer-events: none; transition: all 0.6s ease;
+  }
+  .wave-glow.glow-idle { background: radial-gradient(ellipse, rgba(26,40,64,0.4) 0%, transparent 70%); }
+  .wave-glow.glow-user { background: radial-gradient(ellipse, rgba(226,232,240,0.06) 0%, transparent 70%); }
+  .wave-glow.glow-ai   { background: radial-gradient(ellipse, rgba(37,99,235,0.15) 0%, transparent 70%); }
+
+  /* Outer pulse ring (AI speaking) */
+  .pulse-ring {
+    position: absolute; width: 260px; height: 100px; border-radius: 50%;
+    border: 1px solid rgba(37,99,235,0.25);
+    animation: pulseRing 2.4s ease-in-out infinite;
+    opacity: 0; pointer-events: none;
+  }
+  .pulse-ring.active { opacity: 1; }
+  @keyframes pulseRing {
+    0%, 100% { transform: scale(1); opacity: 0.4; }
+    50% { transform: scale(1.08); opacity: 0.1; }
+  }
+
+  .waveform {
+    display: flex; align-items: center; gap: 4px;
+    height: 80px; position: relative; z-index: 2;
+  }
+  .bar {
+    width: 3px; border-radius: 3px;
+    transition: background 0.4s ease;
+  }
+  .status-pill {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 18px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 999px; position: relative; z-index: 2;
+  }
+  .status-dot { width: 7px; height: 7px; border-radius: 50%; }
+  .status-lbl { font-size: 13px; color: var(--textSub); font-weight: 500; }
+
+  /* Correction cards overlay */
+  .cards-area {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    padding: 16px; display: flex; flex-direction: column; gap: 8px;
+    pointer-events: none;
+  }
+  .correction-card {
+    background: rgba(13,19,35,0.95); backdrop-filter: blur(24px);
+    border: 1px solid var(--border); border-radius: 16px;
+    display: flex; overflow: hidden;
+    transform: translateY(100px); opacity: 0;
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    box-shadow: 0 -8px 40px rgba(0,0,0,0.5);
+  }
+  .correction-card.visible { transform: translateY(0); opacity: 1; }
+  .card-strip { width: 3px; flex-shrink: 0; }
+  .card-body { flex: 1; padding: 13px; }
+  .card-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 9px; }
+  .card-badge {
+    padding: 3px 9px; border-radius: 6px; border: 1px solid;
+    font-size: 10px; font-weight: 800; letter-spacing: 0.5px;
+  }
+  .card-handle { width: 28px; height: 3px; background: var(--border); border-radius: 2px; }
+  .card-corr { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
+  .card-orig { flex: 1; font-size: 13px; color: var(--error); text-decoration: line-through; }
+  .card-arrow { font-size: 13px; color: var(--textDim); }
+  .card-fixed { flex: 1; font-size: 13px; color: var(--success); font-weight: 600; }
+  .card-better { font-size: 11px; color: var(--textSub); line-height: 1.5; }
+  .card-better-lbl { color: var(--textDim); font-style: italic; }
+
+  /* ══════════════════════════════════════════
+     SCREEN 4 — HISTORY
+  ══════════════════════════════════════════ */
+  .history-screen { padding: 56px 20px 20px; overflow-y: auto; gap: 0; }
+  .hist-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+  .hist-back { color: var(--blue400); font-size: 13px; font-weight: 500; cursor: pointer; }
+  .hist-title { font-size: 20px; font-weight: 700; color: var(--text); }
+
+  .level-banner {
+    background: var(--surface); border: 1px solid rgba(37,99,235,0.3);
+    border-radius: 18px; padding: 24px; text-align: center; margin-bottom: 24px;
+    position: relative; overflow: hidden;
+  }
+  .level-banner::after {
+    content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 2px;
+    background: var(--blue600);
+  }
+  .level-banner-lbl { font-size: 10px; color: var(--textDim); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 8px; }
+  .level-banner-cefr { font-size: 56px; font-weight: 800; color: var(--text); letter-spacing: -3px; line-height: 1; margin-bottom: 6px; }
+  .level-banner-sub { font-size: 12px; color: var(--textSub); }
+
+  .errors-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; margin-bottom: 24px; }
+  .err-row { display: flex; align-items: center; gap: 10px; padding: 13px 14px; border-bottom: 1px solid var(--border); }
+  .err-row:last-child { border-bottom: none; }
+  .err-badge { padding: 3px 8px; border-radius: 6px; background: rgba(245,158,11,0.15); border: 1px solid rgba(245,158,11,0.3); min-width: 72px; text-align: center; }
+  .err-badge-text { font-size: 10px; font-weight: 700; color: var(--warning); letter-spacing: 0.4px; }
+  .err-body { flex: 1; }
+  .err-orig { font-size: 12px; color: var(--textSub); text-decoration: line-through; margin-bottom: 2px; }
+  .err-corr { font-size: 12px; color: var(--blue300); font-weight: 600; }
+  .err-count { font-size: 12px; font-weight: 700; color: var(--error); }
+
+  .sess-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 15px; margin-bottom: 10px; }
+  .sess-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .sess-mode-tag { padding: 3px 10px; border-radius: 6px; background: rgba(37,99,235,0.15); border: 1px solid rgba(37,99,235,0.3); }
+  .sess-mode-text { font-size: 10px; font-weight: 700; color: var(--blue400); letter-spacing: 0.5px; }
+  .sess-date-text { font-size: 12px; color: var(--textSub); }
+  .sess-dur { font-size: 12px; color: var(--textDim); }
+  .scores-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .cefr-pill { padding: 4px 11px; background: var(--blue600); border-radius: 7px; }
+  .cefr-pill-text { font-size: 13px; font-weight: 800; color: #fff; }
+  .score-item { text-align: center; min-width: 44px; }
+  .score-item-lbl { font-size: 9px; color: var(--textDim); letter-spacing: 0.3px; margin-bottom: 1px; }
+  .score-item-val { font-size: 14px; font-weight: 700; }
+
+  /* ══════════════════════════════════════════
+     SCREEN 5 — SESSION SPEAKING (full immersive)
+  ══════════════════════════════════════════ */
+
+  /* ══════════════════════════════════════════
+     TRANSITIONS
+  ══════════════════════════════════════════ */
+  .screen { animation: none; }
+  .screen.slide-in { animation: slideIn 0.28s ease forwards; }
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateX(20px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 0; }
+
+  /* ── Design notes panel ── */
+  .notes-panel {
+    max-width: 500px; width: 100%;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+    padding: 20px 22px; margin: 0 20px;
+  }
+  .notes-title { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 14px; letter-spacing: -0.2px; }
+  .note { display: flex; gap: 10px; margin-bottom: 10px; align-items: flex-start; }
+  .note-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--blue400); margin-top: 5px; flex-shrink: 0; }
+  .note-text { font-size: 12px; color: var(--textSub); line-height: 1.6; }
+  .note-text strong { color: var(--text); }
+</style>
+</head>
+<body>
+
+<!-- ── Navigation ── -->
+<div class="nav">
+  <span class="nav-label">ECHOCOACH</span>
+  <button class="nav-btn active" onclick="show('login')">Login</button>
+  <button class="nav-btn" onclick="show('home')">Home</button>
+  <button class="nav-btn" onclick="show('session-idle')">Session · Idle</button>
+  <button class="nav-btn" onclick="show('session-listen')">Session · Listening</button>
+  <button class="nav-btn" onclick="show('session-ai')">Session · AI Speaking</button>
+  <button class="nav-btn" onclick="show('session-card')">Session · Correction</button>
+  <button class="nav-btn" onclick="show('history')">History</button>
+</div>
+
+<div class="stage">
+
+<!-- ── Phone ── -->
+<div class="phone-wrap">
+  <div class="phone">
+    <div class="phone-notch"></div>
+
+    <!-- LOGIN -->
+    <div class="screen login-screen visible" id="s-login">
+      <div class="logo-row">
+        <div class="logo-mark"></div>
+        <div class="logo-text">EchoCoach</div>
+      </div>
+      <div class="logo-sub">AI English coaching for IELTS Band 7+</div>
+      <div class="divider"></div>
+      <div class="field-label">Email</div>
+      <input class="input" type="email" placeholder="you@example.com">
+      <div class="field-label">Password</div>
+      <input class="input" type="password" placeholder="••••••••">
+      <button class="btn-primary" onclick="show('home')">Sign In</button>
+      <div class="link-row">
+        <span class="link">No account? </span>
+        <span class="link-hi">Create one</span>
+      </div>
+    </div>
+
+    <!-- HOME -->
+    <div class="screen home-screen" id="s-home">
+      <div class="home-header">
+        <div>
+          <div class="greeting">Good day,</div>
+          <div class="handle">ahmad_dev</div>
+        </div>
+        <div class="pill-btn" onclick="show('history')">Progress</div>
+      </div>
+
+      <!-- CEFR card -->
+      <div class="cefr-card">
+        <div class="cefr-card-glow"></div>
+        <div>
+          <div class="cefr-lbl">Current Level</div>
+          <div class="cefr-val">B2</div>
+          <div class="cefr-sub">IELTS preparation</div>
+        </div>
+        <div class="ielts-box">
+          <div class="ielts-lbl">IELTS</div>
+          <div class="ielts-val">6.5</div>
+        </div>
+      </div>
+
+      <div class="section-title">Start a Session</div>
+
+      <!-- Mode selector -->
+      <div class="modes">
+        <div class="mode-row" onclick="show('session-idle')">
+          <div class="mode-accent" style="background:#60A5FA"></div>
+          <div class="mode-body">
+            <div class="mode-head">
+              <span class="mode-name">Diagnostic</span>
+              <span class="mode-tag" style="color:#60A5FA;border-color:rgba(96,165,250,0.35);background:rgba(96,165,250,0.1)">3 min</span>
+            </div>
+            <div class="mode-desc">Assess your CEFR level in 3 minutes</div>
+          </div>
+          <div class="mode-arrow" style="color:#60A5FA">›</div>
+        </div>
+        <div class="mode-row" onclick="show('session-idle')">
+          <div class="mode-accent" style="background:#22D3EE"></div>
+          <div class="mode-body">
+            <div class="mode-head">
+              <span class="mode-name">Training</span>
+              <span class="mode-tag" style="color:#22D3EE;border-color:rgba(34,211,238,0.35);background:rgba(34,211,238,0.1)">Recommended</span>
+            </div>
+            <div class="mode-desc">Conversation coaching with live corrections</div>
+          </div>
+          <div class="mode-arrow" style="color:#22D3EE">›</div>
+        </div>
+        <div class="mode-row" onclick="show('session-idle')">
+          <div class="mode-accent" style="background:#FBBF24"></div>
+          <div class="mode-body">
+            <div class="mode-head">
+              <span class="mode-name">Interview Prep</span>
+              <span class="mode-tag" style="color:#FBBF24;border-color:rgba(251,191,36,0.35);background:rgba(251,191,36,0.1)">Professional</span>
+            </div>
+            <div class="mode-desc">STAR-format practice for job interviews</div>
+          </div>
+          <div class="mode-arrow" style="color:#FBBF24">›</div>
+        </div>
+      </div>
+
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <div class="section-title" style="margin-bottom:0">Recent</div>
+        <div style="font-size:12px;color:var(--blue400);font-weight:500;cursor:pointer" onclick="show('history')">View all →</div>
+      </div>
+      <div class="session-rows">
+        <div class="sess-row">
+          <div><div class="sess-mode">TRAINING</div><div class="sess-date">Apr 16</div></div>
+          <div class="sess-chips">
+            <div class="score-chip"><span>F</span>6.5</div>
+            <div class="score-chip"><span>G</span>6.0</div>
+          </div>
+        </div>
+        <div class="sess-row">
+          <div><div class="sess-mode">DIAGNOSTIC</div><div class="sess-date">Apr 14</div></div>
+          <div class="sess-chips">
+            <div class="score-chip"><span>B2</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SESSION IDLE -->
+    <div class="screen session-screen" id="s-session-idle">
+      <div class="session-topbar">
+        <div class="end-btn" onclick="show('home')">End</div>
+        <div class="mode-tag-top">TRAINING</div>
+        <div class="timer">00:00</div>
+      </div>
+      <div class="wave-area">
+        <div class="wave-glow glow-idle"></div>
+        <div class="waveform" id="wf-idle"></div>
+        <div class="status-pill">
+          <div class="status-dot" style="background:var(--textDim)"></div>
+          <span class="status-lbl">Ready</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- SESSION LISTENING -->
+    <div class="screen session-screen" id="s-session-listen">
+      <div class="session-topbar">
+        <div class="end-btn" onclick="show('home')">End</div>
+        <div class="mode-tag-top">TRAINING</div>
+        <div class="timer">00:47</div>
+      </div>
+      <div class="wave-area">
+        <div class="wave-glow glow-user"></div>
+        <div class="waveform" id="wf-user"></div>
+        <div class="status-pill">
+          <div class="status-dot" style="background:var(--success);box-shadow:0 0 8px var(--success)"></div>
+          <span class="status-lbl">Listening</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- SESSION AI SPEAKING -->
+    <div class="screen session-screen" id="s-session-ai">
+      <div class="session-topbar">
+        <div class="end-btn" onclick="show('home')">End</div>
+        <div class="mode-tag-top">TRAINING</div>
+        <div class="timer">01:12</div>
+      </div>
+      <div class="wave-area">
+        <div class="wave-glow glow-ai"></div>
+        <div class="pulse-ring active"></div>
+        <div class="waveform" id="wf-ai"></div>
+        <div class="status-pill">
+          <div class="status-dot" style="background:var(--blue400);box-shadow:0 0 8px var(--blue400)"></div>
+          <span class="status-lbl">EchoCoach speaking</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- SESSION AI + CORRECTION CARD -->
+    <div class="screen session-screen" id="s-session-card">
+      <div class="session-topbar">
+        <div class="end-btn" onclick="show('home')">End</div>
+        <div class="mode-tag-top">TRAINING</div>
+        <div class="timer">02:08</div>
+      </div>
+      <div class="wave-area">
+        <div class="wave-glow glow-ai"></div>
+        <div class="pulse-ring active"></div>
+        <div class="waveform" id="wf-ai2"></div>
+        <div class="status-pill">
+          <div class="status-dot" style="background:var(--blue400);box-shadow:0 0 8px var(--blue400)"></div>
+          <span class="status-lbl">EchoCoach speaking</span>
+        </div>
+      </div>
+      <div class="cards-area">
+        <div class="correction-card" id="card1">
+          <div class="card-strip" style="background:#F59E0B"></div>
+          <div class="card-body">
+            <div class="card-top">
+              <div class="card-badge" style="color:#F59E0B;border-color:rgba(245,158,11,0.4);background:rgba(245,158,11,0.12)">TENSE</div>
+              <div class="card-handle"></div>
+            </div>
+            <div class="card-corr">
+              <span class="card-orig">I have went to London</span>
+              <span class="card-arrow">→</span>
+              <span class="card-fixed">I have been to London</span>
+            </div>
+            <div class="card-better"><span class="card-better-lbl">Better: </span>I've actually been to London twice for work.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- HISTORY -->
+    <div class="screen history-screen" id="s-history">
+      <div class="hist-header">
+        <div class="hist-back" onclick="show('home')">← Back</div>
+        <div class="hist-title">Progress</div>
+        <div style="width:48px"></div>
+      </div>
+
+      <div class="level-banner">
+        <div class="level-banner-lbl">Current Level</div>
+        <div class="level-banner-cefr">B2</div>
+        <div class="level-banner-sub">Upper-Intermediate · IELTS 6.5</div>
+      </div>
+
+      <div class="section-title">Recurring Errors</div>
+      <div class="errors-card" style="margin-bottom:24px">
+        <div class="err-row">
+          <div class="err-badge"><div class="err-badge-text">TENSE</div></div>
+          <div class="err-body">
+            <div class="err-orig">I have went yesterday</div>
+            <div class="err-corr">I went yesterday</div>
+          </div>
+          <div class="err-count">×7</div>
+        </div>
+        <div class="err-row">
+          <div class="err-badge"><div class="err-badge-text">ARTICLE</div></div>
+          <div class="err-body">
+            <div class="err-orig">He is an honest person</div>
+            <div class="err-corr">He is an honest person ✓</div>
+          </div>
+          <div class="err-count">×4</div>
+        </div>
+        <div class="err-row">
+          <div class="err-badge" style="background:rgba(96,165,250,0.12);border-color:rgba(96,165,250,0.3)"><div class="err-badge-text" style="color:var(--blue400)">FILLER</div></div>
+          <div class="err-body">
+            <div class="err-orig">umm, so basically, like...</div>
+            <div class="err-corr">Remove filler words</div>
+          </div>
+          <div class="err-count">×12</div>
+        </div>
+      </div>
+
+      <div class="section-title">Sessions</div>
+      <div class="sess-card">
+        <div class="sess-card-header">
+          <div class="sess-mode-tag"><div class="sess-mode-text">DIAGNOSTIC</div></div>
+          <div class="sess-date-text">Apr 16, 2026</div>
+          <div class="sess-dur">4:22</div>
+        </div>
+        <div class="scores-row">
+          <div class="cefr-pill"><div class="cefr-pill-text">B2</div></div>
+          <div class="score-item"><div class="score-item-lbl">Fluency</div><div class="score-item-val" style="color:var(--warning)">6.0</div></div>
+          <div class="score-item"><div class="score-item-lbl">Grammar</div><div class="score-item-val" style="color:var(--warning)">6.5</div></div>
+          <div class="score-item"><div class="score-item-lbl">Lexical</div><div class="score-item-val" style="color:var(--success)">7.0</div></div>
+          <div class="score-item"><div class="score-item-lbl">Pronun.</div><div class="score-item-val" style="color:var(--success)">7.0</div></div>
+        </div>
+      </div>
+      <div class="sess-card">
+        <div class="sess-card-header">
+          <div class="sess-mode-tag"><div class="sess-mode-text">TRAINING</div></div>
+          <div class="sess-date-text">Apr 14, 2026</div>
+          <div class="sess-dur">12:07</div>
+        </div>
+        <div class="scores-row">
+          <div class="cefr-pill"><div class="cefr-pill-text">B2</div></div>
+          <div class="score-item"><div class="score-item-lbl">Fluency</div><div class="score-item-val" style="color:var(--warning)">6.5</div></div>
+          <div class="score-item"><div class="score-item-lbl">Grammar</div><div class="score-item-val" style="color:var(--warning)">6.0</div></div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /phone -->
+</div><!-- /phone-wrap -->
+
+<!-- ── Design notes ── -->
+<div class="notes-panel" id="notes-panel">
+  <div class="notes-title">Design notes — Login</div>
+  <div id="notes-content"></div>
+</div>
+
+</div><!-- /stage -->
+
+<script>
+const SCREENS = {
+  login:         { id: 's-login',        label: 'Login' },
+  home:          { id: 's-home',         label: 'Home' },
+  'session-idle':   { id: 's-session-idle',   label: 'Session · Idle' },
+  'session-listen': { id: 's-session-listen', label: 'Session · Listening' },
+  'session-ai':     { id: 's-session-ai',     label: 'Session · AI Speaking' },
+  'session-card':   { id: 's-session-card',   label: 'Session + Correction Card' },
+  history:       { id: 's-history',      label: 'History' },
+};
+
+const NOTES = {
+  login: [
+    ['Logo mark', 'Spinning ring inside the blue square — signals the AI is always ready. No static wordmark.'],
+    ['Input labels', 'ALL-CAPS 10px — keeps hierarchy clear without competing with content.'],
+    ['CTA glow', 'Button casts a soft blue shadow — the only light source on a dark page, draws the eye naturally.'],
+    ['No illustration', 'Pure typography + color. Every pixel earns its place.'],
+  ],
+  home: [
+    ['CEFR card left strip', '3px blue vertical bar — communicates level at a glance even before reading the text.'],
+    ['B2 large type', '44px 800 weight. The user\'s level is the most important number — it should feel earned.'],
+    ['Mode selector', 'Each mode has a distinct color: blue (diagnostic), cyan (training), gold (interview). Consistent throughout the app.'],
+    ['Recent sessions', 'Minimal — date + score chips only. No fluff. Tap to see full history.'],
+  ],
+  'session-idle': [
+    ['Waveform centered', 'Full vertical real estate. Nothing competes with the voice interaction.'],
+    ['Dim bars', '45% opacity idle state. They\'re breathing — alive but quiet.'],
+    ['Status pill', 'Rounded pill below waveform. Single source of state truth.'],
+    ['Minimal chrome', 'Only End button, mode tag, and timer. The rest is the conversation.'],
+  ],
+  'session-listen': [
+    ['White bars', 'User speaking = white bars. High contrast. Reactive fast animation.'],
+    ['Green status dot', 'Glowing green dot — universally means "active, recording".'],
+    ['No recording indicator ring', 'The waveform IS the recording indicator. Redundancy removed.'],
+  ],
+  'session-ai': [
+    ['Blue bars', '#60A5FA. AI blue. Visually opposite to user white — instant clarity on who is speaking.'],
+    ['Pulse ring', 'Outer ellipse ring pulses slowly — AI presence without being distracting.'],
+    ['Radial glow', 'Soft blue radial gradient behind bars — gives depth without a flat look.'],
+    ['Blue dot glow', 'Status dot has a box-shadow matching its color — micro-detail that signals quality.'],
+  ],
+  'session-card': [
+    ['Glassmorphism card', 'backdrop-filter: blur(24px) + semi-transparent bg. Feels layered over the session.'],
+    ['Left color strip', '3px colored strip = error type at a glance. No need to read the badge.'],
+    ['Strikethrough → green', 'Red strikethrough original, green corrected. Universal error/fix visual language.'],
+    ['Swipe-down to dismiss', 'Handle bar at top signals dismissibility. 6s auto-dismiss.'],
+    ['AI still speaking underneath', 'The waveform is visible through the card. Dual-stream confirmed visually.'],
+  ],
+  history: [
+    ['B2 hero display', '56px lettering. The CEFR level is the reward — show it big.'],
+    ['Bottom glow line', '2px blue line at the bottom of the level card — subtle flourish, feels complete.'],
+    ['Error frequency count', 'Red ×N count. Most important signal — if it\'s high, the AI will target it.'],
+    ['Score colors', 'Green ≥ 7.0, amber 5.5–6.9, red < 5.5. Matches IELTS band color conventions.'],
+  ],
+};
+
+let currentScreen = 'login';
+let waveIntervals = {};
+
+function show(name) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('visible','slide-in'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+
+  const s = SCREENS[name];
+  const el = document.getElementById(s.id);
+  el.classList.add('visible','slide-in');
+  currentScreen = name;
+
+  // Highlight nav btn
+  document.querySelectorAll('.nav-btn').forEach(b => {
+    if (b.textContent.trim().startsWith(s.label.split(' ')[0])) b.classList.add('active');
+  });
+
+  // Update notes
+  document.querySelector('.notes-title').textContent = 'Design notes — ' + s.label;
+  const nc = document.getElementById('notes-content');
+  nc.innerHTML = '';
+  (NOTES[name] || []).forEach(([title, text]) => {
+    nc.innerHTML += `<div class="note"><div class="note-dot"></div><div class="note-text"><strong>${title}</strong> — ${text}</div></div>`;
+  });
+
+  // Animate correction card
+  if (name === 'session-card') {
+    setTimeout(() => {
+      document.getElementById('card1').classList.add('visible');
+    }, 300);
+  } else {
+    const c = document.getElementById('card1');
+    if (c) c.classList.remove('visible');
+  }
+
+  // Start waveforms
+  Object.values(waveIntervals).forEach(clearInterval);
+  waveIntervals = {};
+
+  if (name === 'session-idle') startWave('wf-idle', 'idle');
+  if (name === 'session-listen') startWave('wf-user', 'user');
+  if (name === 'session-ai') startWave('wf-ai', 'ai');
+  if (name === 'session-card') startWave('wf-ai2', 'ai');
+}
+
+function startWave(containerId, mode) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  container.innerHTML = '';
+  const BAR_COUNT = 24;
+  const bars = [];
+  const phases = Array.from({length: BAR_COUNT}, (_, i) => Math.random() * Math.PI * 2);
+  const speeds = Array.from({length: BAR_COUNT}, (_, i) => 0.04 + Math.random() * 0.04);
+
+  for (let i = 0; i < BAR_COUNT; i++) {
+    const bar = document.createElement('div');
+    bar.className = 'bar';
+    bar.style.background = mode === 'ai' ? 'var(--blue400)' :
+                           mode === 'user' ? 'var(--text)' : 'var(--borderMid)';
+    bar.style.opacity = mode === 'idle' ? '0.45' : '1';
+    bar.style.minHeight = '5px';
+    container.appendChild(bar);
+    bars.push(bar);
+  }
+
+  const mid = BAR_COUNT / 2;
+  let t = 0;
+
+  waveIntervals[containerId] = setInterval(() => {
+    t += 1;
+    bars.forEach((bar, i) => {
+      const center = 1 - Math.abs(i - mid) / mid;
+      let h;
+      if (mode === 'idle') {
+        h = 5 + 4 * Math.sin(t * speeds[i] + phases[i]);
+      } else if (mode === 'ai') {
+        const base = 12 + 55 * center;
+        h = base * (0.4 + 0.6 * Math.abs(Math.sin(t * speeds[i] + phases[i])));
+        h = Math.max(5, h);
+      } else {
+        // user — fast, spiky
+        const noise = Math.abs(Math.sin(t * speeds[i] * 2 + phases[i]) * Math.cos(t * speeds[i] * 1.3));
+        h = 5 + 65 * noise * (0.3 + 0.7 * center);
+        h = Math.max(4, Math.min(72, h));
+      }
+      bar.style.height = h + 'px';
+    });
+  }, 30);
+}
+
+// Init
+show('login');
+</script>
+</body>
+</html>

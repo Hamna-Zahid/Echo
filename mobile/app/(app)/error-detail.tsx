@@ -110,12 +110,13 @@ export default function ErrorDetailScreen() {
           onPress: async () => {
             try {
               setResolving(true);
-              // PATCH the error row — backend needs a PATCH /sessions/errors/{id} endpoint
-              // For now update via supabase directly through API if available
-              // We'll just go back with a success state
+              if (errorId) {
+                await api.patch(`/sessions/errors/${errorId}/resolve`, {});
+              }
               router.back();
             } catch (e) {
               console.error('resolve error', e);
+              router.back(); // Navigate back even if API fails
             } finally {
               setResolving(false);
             }

@@ -4,6 +4,7 @@ import {
   ScrollView, Platform,
 } from 'react-native';
 import { router } from 'expo-router';
+import { api } from '../../services/api';
 import { T, Fonts, Spacing, Shadow } from '../../constants/tokens';
 import { EchoButton, EchoLogo, MicroLabel } from '../../components/echo/shared';
 import { IconCheck, IconClipboard, IconBriefcase, IconBuilding, IconChat } from '../../components/echo/icons';
@@ -29,8 +30,19 @@ export default function PostRegScreen() {
 
   const ready = !!(level && goal);
 
-  const handleContinue = () => {
-    // Navigate to app — home screen
+  const handleContinue = async () => {
+    try {
+      // Parse CEFR level from the selected string, e.g. "B1 – Pre-intermediate" → "B1"
+      const cefrCode = level ? level.split(' ')[0] : null;
+      if (cefrCode || goal) {
+        await api.patch('/auth/profile', {
+          ...(cefrCode && { cefr_level: cefrCode }),
+          ...(goal    && { goal }),
+        });
+      }
+    } catch (_) {
+      // Non-blocking — proceed even if save fails
+    }
     router.replace('/(app)');
   };
 
