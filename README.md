@@ -11,13 +11,11 @@ Echo listens to you speak, catches grammar and vocabulary errors in real time, a
 <table>
   <tr>
     <td align="center"><b>Onboarding</b></td>
-    <td align="center"><b>Sign In</b></td>
     <td align="center"><b>Home</b></td>
     <td align="center"><b>Live Session</b></td>
   </tr>
   <tr>
     <td><img src="mobile/assets/screenshots/01-onboarding.jpg" width="180"/></td>
-    <td><img src="mobile/assets/screenshots/02-login.jpg" width="180"/></td>
     <td><img src="mobile/assets/screenshots/03-home.jpg" width="180"/></td>
     <td><img src="mobile/assets/screenshots/04-session.jpg" width="180"/></td>
   </tr>
@@ -25,13 +23,11 @@ Echo listens to you speak, catches grammar and vocabulary errors in real time, a
     <td align="center"><b>Session Complete</b></td>
     <td align="center"><b>Diagnostic Results</b></td>
     <td align="center"><b>Progress</b></td>
-    <td align="center"><b>Error Detail</b></td>
   </tr>
   <tr>
     <td><img src="mobile/assets/screenshots/05-session-end.jpg" width="180"/></td>
     <td><img src="mobile/assets/screenshots/06-diagnostic.jpg" width="180"/></td>
     <td><img src="mobile/assets/screenshots/07-progress.jpg" width="180"/></td>
-    <td><img src="mobile/assets/screenshots/08-error-detail.jpg" width="180"/></td>
   </tr>
 </table>
 
