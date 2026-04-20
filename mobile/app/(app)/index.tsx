@@ -4,13 +4,34 @@ import {
   ScrollView, ActivityIndicator, Platform,
 } from 'react-native';
 import { router } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '../../services/supabase';
 import { api } from '../../services/api';
-import ModeSelector from '../../components/ModeSelector';
-import { C, FONT, RADIUS } from '../../constants/colors';
+import { T, Fonts, Spacing, Shadow, MODES } from '../../constants/tokens';
+import { SectionHeader, ScoreChip, StreakChip, MicroLabel, BottomTabBar } from '../../components/echo/shared';
+import { IconMic, IconChart, IconBriefcase, IconChat, IconBuilding, IconWaveform, IconClipboard, IconChevronRight } from '../../components/echo/icons';
+
+function getModeIcon(modeId: string, color: string, size = 20) {
+  switch (modeId) {
+    case 'Diagnostic':           return <IconClipboard color={color} size={size} />;
+    case 'IELTS Training':       return <IconMic color={color} size={size} />;
+    case 'Interview Prep':       return <IconBriefcase color={color} size={size} />;
+    case 'Daily Conversation':   return <IconChat color={color} size={size} />;
+    case 'Professional English': return <IconBuilding color={color} size={size} />;
+    case 'Accent Training':      return <IconWaveform color={color} size={size} />;
+    default: return <IconMic color={color} size={size} />;
+  }
+}
+
+function getGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning,';
+  if (h < 17) return 'Good afternoon,';
+  return 'Good evening,';
+}
 
 export default function HomeScreen() {
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser]       = useState<any>(null);
   const [progress, setProgress] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
@@ -18,8 +39,8 @@ export default function HomeScreen() {
 
   const loadData = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      setUser(user);
+      const { data: { user: u } } = await supabase.auth.getUser();
+      setUser(u);
       const data = await api.get('/sessions/progress/summary');
       setProgress(data);
     } catch (e) {
@@ -29,183 +50,214 @@ export default function HomeScreen() {
     }
   };
 
-  const startSession = (mode: 'diagnostic' | 'training' | 'interview') => {
-    const sid = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    router.push({ pathname: '/(app)/session', params: { sessionId: sid, mode } });
+  const goToMode = (mode: typeof MODES[number]) => {
+    router.push({ pathname: '/(app)/pre-session', params: { modeId: mode.id, mode: mode.mode } });
   };
 
   if (loading) {
-    return <View style={s.centered}><ActivityIndicator size="large" color={C.blue600} /></View>;
+    return (
+      <View style={{ flex: 1, backgroundColor: T.bg, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator color={T.rose600} />
+      </View>
+    );
   }
 
-  const profile = progress?.user;
-  const cefr = profile?.cefr_level;
-  const ielts = profile?.ielts_score;
-  const recent = progress?.recent_sessions?.slice(0, 3) || [];
+  const profile    = progress?.user;
+  const cefr       = profile?.cefr_level;
+  const ielts      = profile?.ielts_score;
+  const streak     = profile?.streak_days || 0;
+  const totalSess  = profile?.total_sessions || 0;
+  const errFixed   = profile?.total_errors_fixed || 0;
+  const handle     = user?.email?.split('@')[0] ?? 'Learner';
+  const recent     = progress?.recent_sessions?.slice(0, 3) || [];
+
+  const modeColors: Record<string, string> = {
+    diagnostic: '#0EA5E9', training: '#E11D74', interview: '#D97706',
+    conversation: '#0D9488', professional: '#6366F1', accent: '#7C3AED',
+  };
 
   return (
+    <View style={{ flex: 1, backgroundColor: T.bgSubtle }}>
     <ScrollView style={s.root} contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
 
-      {/* Header */}
+      {/* ── Header ── */}
       <View style={s.header}>
         <View>
-          <Text style={s.greeting}>Good day,</Text>
-          <Text style={s.handle}>{user?.email?.split('@')[0] ?? 'Learner'}</Text>
+          <Text style={s.greeting}>{getGreeting()}</Text>
+          <Text style={s.handle}>{handle}.</Text>
         </View>
-        <TouchableOpacity
-          style={s.historyBtn}
-          onPress={() => router.push('/(app)/history')}
-        >
-          <Text style={s.historyBtnText}>Progress</Text>
-        </TouchableOpacity>
+        <View style={s.headerRight}>
+          {streak > 0 && <StreakChip count={streak} />}
+          <TouchableOpacity onPress={() => router.push('/(app)/profile')} style={s.avatar}>
+            <Text style={s.avatarText}>{handle[0]?.toUpperCase()}</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
-      {/* Level card */}
-      {cefr ? (
-        <View style={s.levelCard}>
-          <View style={s.levelCardLeft}>
-            <Text style={s.levelCardLabel}>Current Level</Text>
-            <Text style={s.levelCardCEFR}>{cefr}</Text>
-            <Text style={s.levelCardSub}>{profile?.target_exam ?? 'IELTS'} preparation</Text>
+      {/* ── Level card ── */}
+      <TouchableOpacity activeOpacity={0.9} onPress={() => router.push('/(app)/history')} style={{ marginBottom: 24 }}>
+        <LinearGradient
+          colors={['#D81B60', '#E11D74', '#C2185B']}
+          start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+          style={s.levelCard}>
+          {/* Decorative circles */}
+          <View style={s.levelCircle1} />
+          <View style={s.levelCircle2} />
+
+          <View style={s.levelCardInner}>
+            <View>
+              <MicroLabel style={s.levelMicro}>Current Level</MicroLabel>
+              <Text style={s.levelCEFR}>{cefr ?? '—'}</Text>
+              <Text style={s.levelCEFRSub}>{cefr ? 'Upper Intermediate' : 'Run diagnostic'}</Text>
+            </View>
+            {ielts ? (
+              <View style={{ alignItems: 'flex-end' }}>
+                <MicroLabel style={s.levelMicro}>IELTS Est.</MicroLabel>
+                <Text style={s.levelIELTS}>{ielts}</Text>
+                <Text style={s.levelTarget}>Target: 7.0</Text>
+              </View>
+            ) : (
+              <View style={{ alignItems: 'flex-end' }}>
+                <MicroLabel style={s.levelMicro}>IELTS Est.</MicroLabel>
+                <Text style={[s.levelIELTS, { opacity: 0.5 }]}>—</Text>
+              </View>
+            )}
           </View>
+
           {ielts && (
-            <View style={s.ieltsBox}>
-              <Text style={s.ieltsBoxLabel}>IELTS</Text>
-              <Text style={s.ieltsBoxScore}>{ielts}</Text>
+            <View style={s.levelProgress}>
+              <View style={s.levelTrack}>
+                <View style={[s.levelFill, { width: `${Math.min((parseFloat(ielts) / 9) * 100, 100)}%` as any }]} />
+              </View>
+              <View style={s.levelProgressLabels}>
+                <Text style={s.levelProgressLabel}>{ielts}</Text>
+                <Text style={s.levelProgressLabel}>Band 9.0</Text>
+              </View>
             </View>
           )}
-          {/* Glow line */}
-          <View style={s.cardGlow} />
-        </View>
-      ) : (
-        <TouchableOpacity style={s.diagnosticCard} onPress={() => startSession('diagnostic')} activeOpacity={0.85}>
-          <View style={s.diagnosticInner}>
-            <View style={s.pulseDot} />
-            <View>
-              <Text style={s.diagnosticTitle}>Begin Assessment</Text>
-              <Text style={s.diagnosticSub}>3-minute speaking test · Instant CEFR score</Text>
-            </View>
+
+          {/* Stats */}
+          <View style={s.levelStats}>
+            {[
+              [String(totalSess), 'Sessions'],
+              [String(streak), 'Day streak'],
+              [String(errFixed), 'Errors fixed'],
+            ].map(([n, l]) => (
+              <View key={l}>
+                <Text style={s.levelStatNum}>{n}</Text>
+                <Text style={s.levelStatLabel}>{l}</Text>
+              </View>
+            ))}
           </View>
-          <Text style={s.diagnosticArrow}>›</Text>
-        </TouchableOpacity>
-      )}
+        </LinearGradient>
+      </TouchableOpacity>
 
-      {/* Mode selector */}
-      <Text style={s.sectionTitle}>Start a Session</Text>
-      <ModeSelector onSelect={startSession} />
+      {/* ── Mode cards ── */}
+      <SectionHeader title="Start a Session" />
+      <View style={{ gap: 9, marginTop: 14, marginBottom: 28 }}>
+        {MODES.map((m) => (
+          <TouchableOpacity key={m.id} style={s.modeCard} onPress={() => goToMode(m)} activeOpacity={0.8}>
+            <View style={[s.modeStrip, { backgroundColor: m.color }]} />
+            <View style={[s.modeIconBox, { backgroundColor: m.bg }]}>
+              {getModeIcon(m.id, m.color, 20)}
+            </View>
+            <View style={s.modeBody}>
+              <View style={s.modeTitleRow}>
+                <Text style={s.modeTitle}>{m.id}</Text>
+                <View style={[s.modeBadge, { backgroundColor: m.badgeBg }]}>
+                  <Text style={[s.modeBadgeText, { color: m.badgeColor }]}>{m.badge}</Text>
+                </View>
+              </View>
+              <Text style={s.modeDesc} numberOfLines={1}>{m.desc}</Text>
+            </View>
+            <View style={{ marginRight: 2 }}>
+              <IconChevronRight color={T.muted} size={14} />
+            </View>
+          </TouchableOpacity>
+        ))}
+      </View>
 
-      {/* Recent sessions */}
+      {/* ── Recent sessions ── */}
       {recent.length > 0 && (
         <>
-          <View style={s.sectionRow}>
-            <Text style={s.sectionTitle}>Recent</Text>
-            <TouchableOpacity onPress={() => router.push('/(app)/history')}>
-              <Text style={s.viewAll}>View all →</Text>
-            </TouchableOpacity>
+          <SectionHeader title="Recent" action="View all" onAction={() => router.push('/(app)/history')} />
+          <View style={{ gap: 7, marginTop: 12, marginBottom: 24 }}>
+            {recent.map((sess: any, i: number) => {
+              const mColor = modeColors[sess.mode] || T.rose600;
+              return (
+                <View key={i} style={s.recentRow}>
+                  <View style={[s.recentModePill, { backgroundColor: mColor + '18' }]}>
+                    <Text style={[s.recentModeText, { color: mColor }]}>{sess.mode?.toUpperCase()}</Text>
+                  </View>
+                  <Text style={s.recentDate}>
+                    {new Date(sess.started_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  </Text>
+                  <View style={s.recentScores}>
+                    {sess.fluency_score  ? <ScoreChip score={sess.fluency_score} label="F" /> : null}
+                    {sess.grammar_score  ? <ScoreChip score={sess.grammar_score} label="G" /> : null}
+                    {sess.cefr_score     ? <ScoreChip score={sess.cefr_score} /> : null}
+                  </View>
+                </View>
+              );
+            })}
           </View>
-          {recent.map((sess: any, i: number) => (
-            <View key={i} style={s.sessionRow}>
-              <View>
-                <Text style={s.sessionMode}>{sess.mode?.toUpperCase()}</Text>
-                <Text style={s.sessionDate}>
-                  {new Date(sess.started_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                </Text>
-              </View>
-              <View style={s.sessionScores}>
-                {[['F', sess.fluency_score], ['G', sess.grammar_score], ['L', sess.lexical_score]].map(([k, v]) =>
-                  v ? (
-                    <View key={k as string} style={s.scoreChip}>
-                      <Text style={s.scoreChipKey}>{k}</Text>
-                      <Text style={s.scoreChipVal}>{v}</Text>
-                    </View>
-                  ) : null
-                )}
-              </View>
-            </View>
-          ))}
         </>
       )}
+
     </ScrollView>
+    <BottomTabBar active="home" />
+    </View>
   );
 }
 
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: C.bg },
-  content: { padding: 24, paddingTop: Platform.OS === 'ios' ? 60 : 48, paddingBottom: 48 },
-  centered: { flex: 1, backgroundColor: C.bg, justifyContent: 'center', alignItems: 'center' },
+  root:    { flex: 1, backgroundColor: T.bgSubtle },
+  content: { paddingTop: Platform.OS === 'ios' ? 56 : 44, paddingBottom: 48, paddingHorizontal: Spacing.screenH },
 
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 },
-  greeting: { fontSize: FONT.sm, color: C.textDim, marginBottom: 3 },
-  handle: { fontSize: FONT.xl, fontWeight: '700', color: C.text },
-  historyBtn: {
-    paddingHorizontal: 14, paddingVertical: 8,
-    borderRadius: RADIUS.sm,
-    backgroundColor: C.surface,
-    borderWidth: 1, borderColor: C.border,
-  },
-  historyBtnText: { color: C.textSub, fontSize: FONT.sm, fontWeight: '500' },
+  // Header
+  header:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20, backgroundColor: T.bg, marginHorizontal: -Spacing.screenH, paddingHorizontal: Spacing.screenH, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: T.border },
+  greeting:    { fontFamily: Fonts.medium, fontSize: 12, color: T.muted, letterSpacing: 0.1 },
+  handle:      { fontFamily: Fonts.bold, fontSize: 21, color: T.charcoal, letterSpacing: -0.5, lineHeight: 26 },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 9, marginTop: 4 },
+  avatar:      { width: 38, height: 38, borderRadius: 999, backgroundColor: T.rose100, borderWidth: 1.5, borderColor: T.rose200, alignItems: 'center', justifyContent: 'center' },
+  avatarText:  { fontFamily: Fonts.bold, fontSize: 14, color: T.rose600 },
 
-  levelCard: {
-    backgroundColor: C.surface,
-    borderRadius: RADIUS.lg,
-    borderWidth: 1, borderColor: C.border,
-    padding: 22,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 32,
-    overflow: 'hidden',
-  },
-  levelCardLeft: {},
-  levelCardLabel: { fontSize: FONT.xs, color: C.textDim, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 6 },
-  levelCardCEFR: { fontSize: FONT['4xl'], fontWeight: '800', color: C.text, letterSpacing: -1, marginBottom: 4 },
-  levelCardSub: { fontSize: FONT.sm, color: C.textSub },
-  ieltsBox: { alignItems: 'flex-end' },
-  ieltsBoxLabel: { fontSize: FONT.xs, color: C.textDim, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 4 },
-  ieltsBoxScore: { fontSize: 36, fontWeight: '800', color: C.blue400 },
-  cardGlow: {
-    position: 'absolute', left: 0, top: 0, bottom: 0, width: 3,
-    backgroundColor: C.blue600,
-    borderTopLeftRadius: RADIUS.lg, borderBottomLeftRadius: RADIUS.lg,
-  },
+  // Level card
+  levelCard:      { borderRadius: 22, padding: 20, overflow: 'hidden', position: 'relative' },
+  levelCircle1:   { position: 'absolute', right: -32, top: -32, width: 130, height: 130, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.055)' },
+  levelCircle2:   { position: 'absolute', right: 24, bottom: -44, width: 100, height: 100, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.035)' },
+  levelCardInner: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', position: 'relative' },
+  levelMicro:     { color: 'rgba(255,255,255,0.5)', marginBottom: 3 },
+  levelCEFR:      { fontFamily: Fonts.extrabold, fontSize: 52, color: '#fff', lineHeight: 52, letterSpacing: -2 },
+  levelCEFRSub:   { fontFamily: Fonts.regular, fontSize: 12, color: 'rgba(255,255,255,0.65)', marginTop: 4 },
+  levelIELTS:     { fontFamily: Fonts.extrabold, fontSize: 38, color: '#FDE68A', lineHeight: 40, letterSpacing: -1.5 },
+  levelTarget:    { fontFamily: Fonts.regular, fontSize: 11, color: 'rgba(255,255,255,0.45)', marginTop: 4 },
 
-  diagnosticCard: {
-    backgroundColor: C.surface,
-    borderRadius: RADIUS.lg,
-    borderWidth: 1, borderColor: C.blue600 + '55',
-    padding: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 32,
-  },
-  diagnosticInner: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  pulseDot: {
-    width: 10, height: 10, borderRadius: 5,
-    backgroundColor: C.blue600,
-    shadowColor: C.blue600, shadowOpacity: 0.8, shadowRadius: 8, shadowOffset: { width: 0, height: 0 },
-  },
-  diagnosticTitle: { fontSize: FONT.lg, fontWeight: '700', color: C.text, marginBottom: 3 },
-  diagnosticSub: { fontSize: FONT.sm, color: C.textSub },
-  diagnosticArrow: { fontSize: 24, color: C.blue400 },
+  levelProgress:       { marginTop: 14, position: 'relative' },
+  levelTrack:          { height: 4, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.16)' },
+  levelFill:           { height: '100%', borderRadius: 999, backgroundColor: '#FDE68A' },
+  levelProgressLabels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
+  levelProgressLabel:  { fontFamily: Fonts.regular, fontSize: 10, color: 'rgba(255,255,255,0.38)', letterSpacing: 0.2 },
 
-  sectionTitle: { fontSize: FONT.md, fontWeight: '700', color: C.text, marginBottom: 14, letterSpacing: -0.2 },
-  sectionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, marginTop: 4 },
-  viewAll: { fontSize: FONT.sm, color: C.blue400, fontWeight: '500' },
+  levelStats:     { flexDirection: 'row', gap: 18, marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)' },
+  levelStatNum:   { fontFamily: Fonts.bold, fontSize: 17, color: '#fff', letterSpacing: -0.4 },
+  levelStatLabel: { fontFamily: Fonts.regular, fontSize: 10, color: 'rgba(255,255,255,0.45)', letterSpacing: 0.2, marginTop: 1 },
 
-  sessionRow: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: C.border,
-  },
-  sessionMode: { fontSize: FONT.xs, fontWeight: '700', color: C.blue400, letterSpacing: 0.8, marginBottom: 4 },
-  sessionDate: { fontSize: FONT.sm, color: C.textSub },
-  sessionScores: { flexDirection: 'row', gap: 6 },
-  scoreChip: {
-    paddingHorizontal: 10, paddingVertical: 5,
-    backgroundColor: C.surface, borderRadius: RADIUS.sm,
-    borderWidth: 1, borderColor: C.border,
-    flexDirection: 'row', gap: 4, alignItems: 'center',
-  },
-  scoreChipKey: { fontSize: FONT.xs, color: C.textDim },
-  scoreChipVal: { fontSize: FONT.sm, color: C.blue400, fontWeight: '700' },
+  // Mode cards
+  modeCard:    { backgroundColor: T.bg, borderWidth: 1, borderColor: T.borderStrong, borderRadius: 17, flexDirection: 'row', alignItems: 'center', overflow: 'hidden', ...Shadow.card },
+  modeStrip:   { width: 3, alignSelf: 'stretch', borderRadius: 1 },
+  modeIconBox: { width: 40, height: 40, borderRadius: 11, alignItems: 'center', justifyContent: 'center', margin: 12, marginLeft: 10 },
+  modeBody:    { flex: 1, paddingVertical: 12, gap: 2, minWidth: 0 },
+  modeTitleRow:{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 },
+  modeTitle:   { fontFamily: Fonts.semibold, fontSize: 14, color: T.charcoal, letterSpacing: -0.2 },
+  modeBadge:   { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 999 },
+  modeBadgeText: { fontFamily: Fonts.bold, fontSize: 10, letterSpacing: 0.2 },
+  modeDesc:    { fontFamily: Fonts.regular, fontSize: 12, color: T.muted },
+
+  // Recent
+  recentRow:      { backgroundColor: T.bg, borderWidth: 1, borderColor: T.borderStrong, borderRadius: 13, padding: 11, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  recentModePill: { height: 24, paddingHorizontal: 9, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
+  recentModeText: { fontFamily: Fonts.bold, fontSize: 10, letterSpacing: 0.4, textTransform: 'uppercase' },
+  recentDate:     { fontFamily: Fonts.medium, fontSize: 13, color: T.charcoal, flex: 1 },
+  recentScores:   { flexDirection: 'row', gap: 5 },
 });

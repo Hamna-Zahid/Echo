@@ -28,8 +28,8 @@ function Bar({ index, mode }: { index: number; mode: WaveformMode }) {
         index * 50,
         withRepeat(
           withSequence(
-            withTiming(MIN_H + 5, { duration: 1000, easing: Easing.inOut(Easing.sine) }),
-            withTiming(MIN_H,     { duration: 1000, easing: Easing.inOut(Easing.sine) }),
+            withTiming(MIN_H + 5, { duration: 1000, easing: Easing.inOut(Easing.sin) }),
+            withTiming(MIN_H,     { duration: 1000, easing: Easing.inOut(Easing.sin) }),
           ), -1, true,
         ),
       );
@@ -42,8 +42,8 @@ function Bar({ index, mode }: { index: number; mode: WaveformMode }) {
         index * 30,
         withRepeat(
           withSequence(
-            withTiming(peak,   { duration: speed, easing: Easing.inOut(Easing.sine) }),
-            withTiming(trough, { duration: speed * 0.8, easing: Easing.inOut(Easing.sine) }),
+            withTiming(peak,   { duration: speed, easing: Easing.inOut(Easing.sin) }),
+            withTiming(trough, { duration: speed * 0.8, easing: Easing.inOut(Easing.sin) }),
           ), -1, true,
         ),
       );

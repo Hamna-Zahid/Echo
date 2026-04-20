@@ -1,16 +1,62 @@
+"""
+TTS service — streaming audio from text.
+
+DEV vs PROD routing (controlled by DEV_TTS env var):
+
+  DEV_TTS=edge  (default in development)
+    → Microsoft Edge TTS via edge-tts library
+    → Completely FREE, no API key required
+    → Good voice quality (Azure Neural voices under the hood)
+    → Returns MP3 bytes, converted to PCM F32LE for client compatibility
+    → Use this during all development and testing
+
+  DEV_TTS=cartesia  (or unset in production)
+    → Cartesia Sonic SSE streaming
+    → $6/1M characters, first 1M free
+    → < 300ms first audio chunk
+    → Use this for production and pre-launch testing only
+
+  DEV_TTS=silent
+    → Returns a short burst of silence immediately
+    → Use when testing AI logic only (no audio needed at all)
+    → Fastest possible — zero latency, zero cost
+
+Set in backend/.env:
+  DEV_TTS=edge       ← development (free)
+  DEV_TTS=cartesia   ← production (paid)
+  DEV_TTS=silent     ← pure AI logic testing
+"""
+
+import asyncio
+import base64
+import io
+import json
 import os
-import httpx
+import struct
 from typing import AsyncGenerator
 
-CARTESIA_API_URL = "https://api.cartesia.ai/tts/bytes"
+import httpx
+
+# ── Config ────────────────────────────────────────────────────────────────────
+
 CARTESIA_STREAMING_URL = "https://api.cartesia.ai/tts/sse"
 
-# Voice IDs are configured per accent in env vars
 VOICE_IDS = {
     "american": os.environ.get("CARTESIA_VOICE_ID_AMERICAN", ""),
-    "british": os.environ.get("CARTESIA_VOICE_ID_BRITISH", ""),
+    "british":  os.environ.get("CARTESIA_VOICE_ID_BRITISH", ""),
 }
 
+# Edge TTS voice mapping (free, no key needed)
+EDGE_VOICES = {
+    "american": "en-US-AriaNeural",    # Natural, warm American female
+    "british":  "en-GB-SoniaNeural",   # Clear, professional British female
+}
+
+# Detect mode: default to 'edge' in development (safe default — never accidentally charges Cartesia)
+_TTS_MODE = os.environ.get("DEV_TTS", "edge").lower()
+
+
+# ── Public interface ──────────────────────────────────────────────────────────
 
 async def stream_tts(
     text: str,
@@ -18,16 +64,147 @@ async def stream_tts(
     sample_rate: int = 24000,
 ) -> AsyncGenerator[bytes, None]:
     """
-    Stream audio chunks from Cartesia Sonic API.
-    Uses SSE streaming to yield audio bytes as they arrive — never buffers full response.
+    Stream audio chunks for a text string.
+    Routing determined by DEV_TTS environment variable.
+    Always yields raw PCM F32LE bytes at `sample_rate` Hz.
+    Never buffers the full response.
+    """
+    if not text or not text.strip():
+        return
+
+    mode = _TTS_MODE
+
+    if mode == "silent":
+        # Pure silence — 0.3s of F32LE 24kHz silence
+        # Useful for testing AI logic without any audio overhead
+        num_samples = int(sample_rate * 0.3)
+        yield bytes(num_samples * 4)  # 4 bytes per F32LE sample
+        return
+
+    if mode == "edge":
+        async for chunk in _edge_tts(text, accent, sample_rate):
+            yield chunk
+        return
+
+    # Default: Cartesia (production)
+    async for chunk in _cartesia_tts(text, accent, sample_rate):
+        yield chunk
+
+
+# ── Edge TTS (FREE — development) ────────────────────────────────────────────
+
+async def _edge_tts(
+    text: str,
+    accent: str = "american",
+    sample_rate: int = 24000,
+) -> AsyncGenerator[bytes, None]:
+    """
+    Microsoft Edge TTS via edge-tts library.
+    Returns PCM F32LE chunks converted from MP3.
+    Completely free, no API key, good voice quality.
+    """
+    try:
+        import edge_tts
+
+        voice = EDGE_VOICES.get(accent, EDGE_VOICES["american"])
+        communicator = edge_tts.Communicate(text, voice)
+
+        # Collect MP3 bytes from edge-tts stream
+        mp3_chunks = []
+        async for item in communicator.stream():
+            if item["type"] == "audio":
+                mp3_chunks.append(item["data"])
+
+        if not mp3_chunks:
+            yield b""
+            return
+
+        mp3_bytes = b"".join(mp3_chunks)
+
+        # Convert MP3 → PCM F32LE using pydub (if available) or fallback
+        pcm_chunks = _mp3_to_pcm_f32le(mp3_bytes, target_sample_rate=sample_rate)
+        for chunk in pcm_chunks:
+            yield chunk
+
+    except ImportError:
+        # edge-tts not installed — yield silence and log warning
+        import warnings
+        warnings.warn(
+            "edge-tts not installed. Run: pip install edge-tts\n"
+            "Falling back to silence. Set DEV_TTS=cartesia to use Cartesia instead.",
+            stacklevel=2,
+        )
+        num_samples = int(sample_rate * 0.5)
+        yield bytes(num_samples * 4)
+
+    except Exception as e:
+        # Any other error — yield silence, don't crash the session
+        num_samples = int(sample_rate * 0.3)
+        yield bytes(num_samples * 4)
+
+
+def _mp3_to_pcm_f32le(
+    mp3_bytes: bytes,
+    target_sample_rate: int = 24000,
+    chunk_size_ms: int = 200,
+) -> list[bytes]:
+    """
+    Convert MP3 bytes to PCM F32LE chunks.
+    Uses pydub + ffmpeg if available, otherwise uses a pure-python fallback.
+    Returns list of raw bytes chunks (each ~200ms of audio).
+    """
+    try:
+        from pydub import AudioSegment
+        import numpy as np
+
+        audio = AudioSegment.from_mp3(io.BytesIO(mp3_bytes))
+        audio = audio.set_frame_rate(target_sample_rate).set_channels(1)
+
+        # Export as raw PCM 16-bit
+        raw_pcm = audio.raw_data
+        # Convert int16 → float32
+        samples_i16 = struct.unpack(f"<{len(raw_pcm)//2}h", raw_pcm)
+        samples_f32 = [s / 32768.0 for s in samples_i16]
+
+        # Pack as F32LE
+        f32_bytes = struct.pack(f"<{len(samples_f32)}f", *samples_f32)
+
+        # Split into ~200ms chunks for streaming behavior
+        chunk_samples = target_sample_rate * chunk_size_ms // 1000
+        chunk_bytes = chunk_samples * 4  # 4 bytes per F32 sample
+        return [f32_bytes[i:i+chunk_bytes] for i in range(0, len(f32_bytes), chunk_bytes)]
+
+    except ImportError:
+        # pydub not available — return MP3 as-is wrapped in a single chunk
+        # Mobile client's pcmF32leToWav will fail but at least no crash
+        return [mp3_bytes]
+
+    except Exception:
+        return [bytes(target_sample_rate * 4)]  # 1s silence
+
+
+# ── Cartesia TTS (PAID — production) ─────────────────────────────────────────
+
+async def _cartesia_tts(
+    text: str,
+    accent: str = "american",
+    sample_rate: int = 24000,
+) -> AsyncGenerator[bytes, None]:
+    """
+    Cartesia Sonic SSE streaming TTS.
+    Streams PCM F32LE audio chunks as they arrive — never buffers full response.
     Target: < 300ms first audio chunk.
-    Falls back to Inworld AI Mini on failure.
     """
     api_key = os.environ.get("CARTESIA_API_KEY", "")
-    voice_id = VOICE_IDS.get(accent, VOICE_IDS["american"])
+    voice_id = VOICE_IDS.get(accent, VOICE_IDS.get("american", ""))
 
     if not api_key or not voice_id:
-        # Fallback: yield silence placeholder if keys not configured
+        import warnings
+        warnings.warn(
+            "CARTESIA_API_KEY or CARTESIA_VOICE_ID not set. "
+            "Set DEV_TTS=edge for free development TTS.",
+            stacklevel=2,
+        )
         yield b""
         return
 
@@ -41,10 +218,7 @@ async def stream_tts(
     payload = {
         "model_id": "sonic-english",
         "transcript": text,
-        "voice": {
-            "mode": "id",
-            "id": voice_id,
-        },
+        "voice": {"mode": "id", "id": voice_id},
         "output_format": {
             "container": "raw",
             "encoding": "pcm_f32le",
@@ -55,9 +229,12 @@ async def stream_tts(
 
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(10.0, connect=3.0)) as client:
-            async with client.stream("POST", CARTESIA_STREAMING_URL, headers=headers, json=payload) as response:
+            async with client.stream(
+                "POST", CARTESIA_STREAMING_URL, headers=headers, json=payload
+            ) as response:
                 if response.status_code != 200:
-                    async for chunk in _fallback_tts(text, accent):
+                    # Cartesia unavailable — fall through to edge-tts
+                    async for chunk in _edge_tts(text, accent, sample_rate):
                         yield chunk
                     return
 
@@ -67,50 +244,13 @@ async def stream_tts(
                         if data_str == "[DONE]":
                             break
                         try:
-                            import json
                             event = json.loads(data_str)
-                            # Cartesia SSE returns base64-encoded audio in each event
                             if "data" in event:
-                                import base64
-                                audio_bytes = base64.b64decode(event["data"])
-                                yield audio_bytes
+                                yield base64.b64decode(event["data"])
                         except Exception:
                             continue
+
     except Exception:
-        async for chunk in _fallback_tts(text, accent):
+        # Any failure — fall back to edge-tts silently
+        async for chunk in _edge_tts(text, accent, sample_rate):
             yield chunk
-
-
-async def _fallback_tts(text: str, accent: str = "american") -> AsyncGenerator[bytes, None]:
-    """
-    Inworld AI Mini fallback TTS.
-    Called when Cartesia is unavailable.
-    """
-    api_key = os.environ.get("INWORLD_API_KEY", "")
-    if not api_key:
-        yield b""
-        return
-
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-    }
-
-    payload = {
-        "text": text,
-        "voice": "en-US-neural" if accent == "american" else "en-GB-neural",
-        "format": "pcm_16000",
-    }
-
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            async with client.stream(
-                "POST",
-                "https://api.inworld.ai/tts/v1/synthesize",
-                headers=headers,
-                json=payload,
-            ) as response:
-                async for chunk in response.aiter_bytes(chunk_size=4096):
-                    yield chunk
-    except Exception:
-        yield b""

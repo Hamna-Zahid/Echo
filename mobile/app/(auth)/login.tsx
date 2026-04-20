@@ -1,18 +1,19 @@
 import { useState } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity,
-  StyleSheet, KeyboardAvoidingView, Platform,
-  ActivityIndicator, Alert,
+  View, Text, TouchableOpacity, StyleSheet,
+  KeyboardAvoidingView, Platform, ActivityIndicator,
+  Alert, ScrollView,
 } from 'react-native';
 import { router } from 'expo-router';
 import { supabase } from '../../services/supabase';
-import { C, FONT, RADIUS } from '../../constants/colors';
+import { T, Fonts, Radius, Spacing } from '../../constants/tokens';
+import { EchoLogo, EchoButton, EchoInput } from '../../components/echo/shared';
 
 export default function LoginScreen() {
-  const [email, setEmail] = useState('');
+  const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [focused, setFocused] = useState<string | null>(null);
+  const [showPass, setShowPass] = useState(false);
+  const [loading, setLoading]   = useState(false);
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
@@ -32,104 +33,88 @@ export default function LoginScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={s.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <View style={s.inner}>
+    <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScrollView contentContainerStyle={s.inner} keyboardShouldPersistTaps="handled">
 
-        {/* Logo */}
         <View style={s.logoRow}>
-          <View style={s.logoMark} />
-          <Text style={s.logoText}>EchoCoach</Text>
+          <EchoLogo size={30} />
         </View>
-        <Text style={s.sub}>AI English coaching for IELTS Band 7+</Text>
+
+        <Text style={s.title}>Welcome back.</Text>
+        <Text style={s.sub}>Sign in to continue your coaching.</Text>
+
+        <View style={{ gap: 12, marginBottom: 8 }}>
+          <EchoInput
+            placeholder="Email address"
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+          />
+          <EchoInput
+            placeholder="Password"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry={!showPass}
+            rightIcon={
+              <TouchableOpacity onPress={() => setShowPass(!showPass)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Text style={s.eyeText}>{showPass ? 'Hide' : 'Show'}</Text>
+              </TouchableOpacity>
+            }
+          />
+        </View>
+
+        <TouchableOpacity style={s.forgotRow} onPress={() => {}}>
+          <Text style={s.forgotText}>Forgot password?</Text>
+        </TouchableOpacity>
+
+        <View style={s.btnWrap}>
+          {loading
+            ? <View style={s.btnLoading}><ActivityIndicator color="#fff" /></View>
+            : <EchoButton label="Sign In" onPress={handleLogin} />}
+        </View>
 
         {/* Divider */}
-        <View style={s.divider} />
+        <View style={s.dividerRow}>
+          <View style={s.dividerLine} />
+          <Text style={s.dividerText}>or</Text>
+          <View style={s.dividerLine} />
+        </View>
 
-        {/* Inputs */}
-        <Text style={s.label}>Email</Text>
-        <TextInput
-          style={[s.input, focused === 'email' && s.inputFocused]}
-          placeholder="you@example.com"
-          placeholderTextColor={C.textDim}
-          value={email}
-          onChangeText={setEmail}
-          onFocus={() => setFocused('email')}
-          onBlur={() => setFocused(null)}
-          autoCapitalize="none"
-          keyboardType="email-address"
-        />
+        <View style={s.bottomRow}>
+          <Text style={s.bottomText}>Don't have an account?</Text>
+          <TouchableOpacity onPress={() => router.push('/(auth)/register')}>
+            <Text style={s.bottomLink}> Create one</Text>
+          </TouchableOpacity>
+        </View>
 
-        <Text style={s.label}>Password</Text>
-        <TextInput
-          style={[s.input, focused === 'password' && s.inputFocused]}
-          placeholder="••••••••"
-          placeholderTextColor={C.textDim}
-          value={password}
-          onChangeText={setPassword}
-          onFocus={() => setFocused('password')}
-          onBlur={() => setFocused(null)}
-          secureTextEntry
-        />
-
-        {/* CTA */}
-        <TouchableOpacity style={s.btn} onPress={handleLogin} disabled={loading} activeOpacity={0.8}>
-          {loading
-            ? <ActivityIndicator color={C.text} size="small" />
-            : <Text style={s.btnText}>Sign In</Text>}
-        </TouchableOpacity>
-
-        <TouchableOpacity onPress={() => router.push('/(auth)/register')} style={s.linkRow}>
-          <Text style={s.linkText}>No account? </Text>
-          <Text style={[s.linkText, s.linkHighlight]}>Create one</Text>
-        </TouchableOpacity>
-      </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: C.bg, justifyContent: 'center' },
-  inner: { paddingHorizontal: 28, paddingBottom: 32 },
+  root:  { flex: 1, backgroundColor: T.bg },
+  inner: { paddingHorizontal: Spacing.screenH, paddingTop: 64, paddingBottom: 48 },
 
-  logoRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
-  logoMark: {
-    width: 28, height: 28, borderRadius: 8,
-    backgroundColor: C.blue600,
-    shadowColor: C.blue600, shadowOpacity: 0.6, shadowRadius: 12, shadowOffset: { width: 0, height: 0 },
+  logoRow:    { marginBottom: 32 },
+  title:      { fontFamily: Fonts.bold, fontSize: 28, color: T.charcoal, letterSpacing: -0.6, marginBottom: 6 },
+  sub:        { fontFamily: Fonts.regular, fontSize: 15, color: T.muted, marginBottom: 28 },
+
+  eyeText:    { fontFamily: Fonts.semibold, fontSize: 12, color: T.rose400 },
+  forgotRow:  { alignSelf: 'flex-end', marginBottom: 22 },
+  forgotText: { fontFamily: Fonts.medium, fontSize: 14, color: T.rose500 },
+
+  btnWrap:    { marginBottom: 24 },
+  btnLoading: {
+    height: 56, borderRadius: Radius.button, backgroundColor: T.rose600,
+    alignItems: 'center', justifyContent: 'center',
   },
-  logoText: { fontSize: FONT['3xl'], fontWeight: '700', color: C.text, letterSpacing: -0.5 },
-  sub: { fontSize: FONT.sm, color: C.textSub, marginBottom: 28 },
-  divider: { height: 1, backgroundColor: C.border, marginBottom: 28 },
 
-  label: { fontSize: FONT.xs, fontWeight: '600', color: C.textSub, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 8 },
-  input: {
-    backgroundColor: C.surface,
-    borderRadius: RADIUS.md,
-    borderWidth: 1,
-    borderColor: C.border,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: FONT.md,
-    color: C.text,
-    marginBottom: 20,
-  },
-  inputFocused: { borderColor: C.blue600 },
+  dividerRow:  { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 24 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: T.border },
+  dividerText: { fontFamily: Fonts.regular, fontSize: 12, color: T.muted, letterSpacing: 0.2 },
 
-  btn: {
-    backgroundColor: C.blue600,
-    borderRadius: RADIUS.md,
-    paddingVertical: 15,
-    alignItems: 'center',
-    marginTop: 4,
-    marginBottom: 20,
-    shadowColor: C.blue600, shadowOpacity: 0.4, shadowRadius: 16, shadowOffset: { width: 0, height: 4 },
-  },
-  btnText: { color: C.text, fontSize: FONT.md, fontWeight: '700', letterSpacing: 0.2 },
-
-  linkRow: { flexDirection: 'row', justifyContent: 'center' },
-  linkText: { fontSize: FONT.sm, color: C.textSub },
-  linkHighlight: { color: C.blue400, fontWeight: '600' },
+  bottomRow:  { flexDirection: 'row', justifyContent: 'center' },
+  bottomText: { fontFamily: Fonts.regular, fontSize: 14, color: T.muted },
+  bottomLink: { fontFamily: Fonts.semibold, fontSize: 14, color: T.rose600 },
 });

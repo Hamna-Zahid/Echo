@@ -3,6 +3,7 @@ import base64
 import json
 import time
 import uuid
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
@@ -10,12 +11,12 @@ from fastapi.websockets import WebSocketState
 
 from db.supabase import get_supabase, verify_token
 from services.redis_state import get_session_state, set_session_state, delete_session_state
-from services.stt import transcribe_audio
+from services.stt import transcribe_audio, transcribe_audio_full
 from services.llm import stream_conversation, stream_diagnostic_score, stream_correction_check
 from services.tts import stream_tts
-from prompts.diagnostic import DIAGNOSTIC_SYSTEM
+from services.pronunciation import score_pronunciation
+from prompts.diagnostic import DIAGNOSTIC_SYSTEM, DIAGNOSTIC_CONVERSATION_SYSTEM
 from prompts.training import build_training_prompt
-from prompts.correction import CORRECTION_SYSTEM
 from prompts.interview import build_interview_prompt
 from models.session import SessionState
 
@@ -102,7 +103,7 @@ async def handle_stream_b(
     accent = user_data.get("preferred_accent", "american")
 
     if mode == "diagnostic":
-        system_prompt = DIAGNOSTIC_SYSTEM
+        system_prompt = DIAGNOSTIC_CONVERSATION_SYSTEM
     elif mode == "interview":
         system_prompt = build_interview_prompt()
     else:  # training (default)
@@ -122,6 +123,14 @@ async def handle_stream_b(
         async for token in stream_conversation(system_prompt, transcript, state):
             sentence_buf += token
             full_response += token
+
+            # Check if diagnostic signals assessment complete
+            if mode == "diagnostic" and "[ASSESSMENT_COMPLETE]" in full_response:
+                full_response = full_response.replace("[ASSESSMENT_COMPLETE]", "").strip()
+                sentence_buf = sentence_buf.replace("[ASSESSMENT_COMPLETE]", "").strip()
+                # Don't speak this token — break and let scoring trigger
+                interrupted = True
+                break
 
             # Flush to TTS on natural sentence boundary
             if (
@@ -159,9 +168,12 @@ async def handle_stream_b(
             refreshed["silence_timer_start"] = time.time()
             await set_session_state(session_id, refreshed)
 
-    # Diagnostic scoring: trigger after 3rd user turn
-    if mode == "diagnostic" and turn_count >= 3 and not state.get("is_diagnostic_complete"):
-        await trigger_diagnostic_score(ws, session_id, state)
+    # Diagnostic scoring: trigger after turn 5.
+    # Two conditions — either sentinel OR turn count fallback (guards against LLM not outputting sentinel)
+    current_state = await get_session_state(session_id)
+    diagnostic_done = (current_state or state).get("is_diagnostic_complete", False)
+    if mode == "diagnostic" and turn_count >= 5 and not diagnostic_done:
+        await trigger_diagnostic_score(ws, session_id, current_state or state)
 
 
 async def handle_stream_c(
@@ -217,10 +229,27 @@ async def handle_stream_c(
 
 
 async def trigger_diagnostic_score(ws: WebSocket, session_id: str, state: dict):
-    """Call Llama 3 70B for full diagnostic scoring after 3 turns."""
+    """
+    Call Llama 3.3 70B for full IELTS-rubric-grounded scoring after 5 turns.
+    Merges Whisper pronunciation proxy scores into the result if Azure is unavailable.
+    """
     try:
         supabase = get_supabase()
-        result = await stream_diagnostic_score(state.get("session_transcript", ""))
+
+        # Merge Whisper pronunciation proxy into transcript context
+        pron_scores = state.get("pronunciation_scores", [])
+        transcript = state.get("session_transcript", "")
+
+        if pron_scores:
+            avg_pron = sum(pron_scores) / len(pron_scores)
+            pron_ielts = round(avg_pron / 100 * 9 * 2) / 2  # map to 0.5 steps
+            transcript += (
+                f"\n\n[SYSTEM NOTE FOR SCORER: Whisper pronunciation confidence proxy = "
+                f"{avg_pron:.1f}/100 (≈ IELTS {pron_ielts}). "
+                f"Use this as a data point for your pronunciation band, not the sole determinant.]"
+            )
+
+        result = await stream_diagnostic_score(transcript)
         if result:
             state["is_diagnostic_complete"] = True
             state["cefr_level"] = result.get("cefr_level")
@@ -233,7 +262,7 @@ async def trigger_diagnostic_score(ws: WebSocket, session_id: str, state: dict):
                 "last_active": "now()",
             }).eq("id", state["user_id"]).execute()
 
-            # Update session row with scores
+            # Update session row with all subscores
             supabase.table("sessions").update({
                 "cefr_score": result.get("cefr_level"),
                 "fluency_score": result.get("fluency"),
@@ -242,7 +271,7 @@ async def trigger_diagnostic_score(ws: WebSocket, session_id: str, state: dict):
                 "pronunciation_score": result.get("pronunciation"),
             }).eq("id", state.get("session_db_id")).execute()
 
-            # Save learning plan
+            # Save personalized learning plan
             supabase.table("learning_plans").insert({
                 "user_id": state["user_id"],
                 "plan_json": result,
@@ -373,9 +402,15 @@ async def websocket_session(
                 audio_bytes = bytes(audio_buffer)
                 audio_buffer.clear()
 
-                # Transcribe
+                # Transcribe — use full result in diagnostic mode for pronunciation hints
                 try:
-                    transcript = await transcribe_audio(audio_bytes)
+                    current_mode = (await get_session_state(session_id) or {}).get("mode", mode)
+                    if current_mode == "diagnostic":
+                        stt_result = await transcribe_audio_full(audio_bytes, include_pronunciation_hints=True)
+                        transcript = stt_result.text
+                    else:
+                        transcript = await transcribe_audio(audio_bytes)
+                        stt_result = None
                 except Exception as e:
                     await send_json(websocket, {"type": "error", "message": f"STT failed: {str(e)}"})
                     continue
@@ -387,12 +422,22 @@ async def websocket_session(
                 if state is None:
                     break
 
-                # Update conversation history + transcript
+                # Update conversation history + transcript (cap at 20 turns to avoid Redis overflow)
                 state["conversation_history"].append({"role": "user", "content": transcript})
+                if len(state["conversation_history"]) > 20:
+                    state["conversation_history"] = state["conversation_history"][-20:]
                 state["session_transcript"] += f"\nUser: {transcript}"
-                state["diagnostic_turn_count"] = state.get("diagnostic_turn_count", 0) + 1
+                new_turn_count = state.get("diagnostic_turn_count", 0) + 1
+                state["diagnostic_turn_count"] = new_turn_count
                 state["tts_is_speaking"] = True
                 state["silence_timer_start"] = None
+
+                # Store pronunciation proxy data for diagnostic scoring
+                if stt_result and stt_result.pronunciation_score is not None:
+                    pron_scores = state.get("pronunciation_scores", [])
+                    pron_scores.append(stt_result.pronunciation_score)
+                    state["pronunciation_scores"] = pron_scores
+
                 await set_session_state(session_id, state)
 
                 # Fire Stream B and Stream C in parallel
@@ -411,9 +456,9 @@ async def websocket_session(
             elif msg_type == "session_end":
                 state = await get_session_state(session_id)
                 if state:
-                    ended_at_ts = time.time()
+                    now_iso = datetime.now(timezone.utc).isoformat()
                     supabase.table("sessions").update({
-                        "ended_at": "now()",
+                        "ended_at": now_iso,
                         "transcript": state.get("session_transcript", ""),
                     }).eq("id", session_db_id).execute()
 
@@ -433,9 +478,10 @@ async def websocket_session(
             pass
     finally:
         nudge_task.cancel()
-        # Clean up: mark session ended if still open
+        # Clean up: mark session ended if still open (e.g. network drop)
         try:
-            supabase.table("sessions").update({"ended_at": "now()"}).eq("id", session_db_id).is_("ended_at", "null").execute()
+            now_iso = datetime.now(timezone.utc).isoformat()
+            supabase.table("sessions").update({"ended_at": now_iso}).eq("id", session_db_id).is_("ended_at", "null").execute()
         except Exception:
             pass
         await delete_session_state(session_id)

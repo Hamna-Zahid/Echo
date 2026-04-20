@@ -16,6 +16,7 @@ import {
   LocalAudioTrack,
   createLocalAudioTrack,
   AudioPresets,
+// @ts-ignore — livekit-client not installed; this hook is unused
 } from 'livekit-client';
 
 const LIVEKIT_URL = process.env.EXPO_PUBLIC_LIVEKIT_URL || '';

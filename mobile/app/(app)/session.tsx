@@ -6,35 +6,35 @@ import {
 import { useLocalSearchParams, router } from 'expo-router';
 import { Audio } from 'expo-av';
 
-import WaveformVisualizer from '../../components/WaveformVisualizer';
-import CorrectionCard from '../../components/CorrectionCard';
-import SessionTimer from '../../components/SessionTimer';
+import { T, Fonts, Spacing } from '../../constants/tokens';
+import { Waveform, StatusPill, CorrectionCard, type SessionState } from '../../components/echo/shared';
 import { useWebSocket } from '../../hooks/useWebSocket';
-import { useVAD } from '../../hooks/useVAD';
-import { useSession } from '../../hooks/useSession';
-import { C, FONT, RADIUS } from '../../constants/colors';
-
-type UIState = 'connecting' | 'idle' | 'listening' | 'processing' | 'speaking';
-
-const STATE_META: Record<UIState, { label: string; dot: string }> = {
-  connecting:  { label: 'Connecting',        dot: C.textDim },
-  idle:        { label: 'Ready',             dot: C.textDim },
-  listening:   { label: 'Listening',         dot: C.success },
-  processing:  { label: 'Processing',        dot: C.warning },
-  speaking:    { label: 'EchoCoach speaking', dot: C.blue400 },
-};
+import { useVAD }        from '../../hooks/useVAD';
+import { useSession }    from '../../hooks/useSession';
 
 export default function SessionScreen() {
-  const { sessionId, mode } = useLocalSearchParams<{ sessionId: string; mode: string }>();
-  const [uiState, setUiState] = useState<UIState>('connecting');
-  const [isActive, setIsActive] = useState(false);
-  const isSpeakingRef = useRef(false);
+  const { sessionId, mode, accent } = useLocalSearchParams<{ sessionId: string; mode: string; accent?: string }>();
+  const [uiState, setUiState]       = useState<SessionState>('connecting');
+  const [isActive, setIsActive]     = useState(false);
+  const [elapsed, setElapsed]       = useState(0);
+  const isSpeakingRef   = useRef(false);
+  const sessionDbIdRef  = useRef<string | null>(null);
 
   const { correctionCards, dismissCard, pushCard, setSessionReady } = useSession();
 
-  // ── Audio playback ────────────────────────────────────────────────────────
-  const audioBufferRef = useRef<Uint8Array[]>([]);
-  const playbackQueueRef = useRef(false);
+  // ── Timer ────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!isActive) return;
+    const id = setInterval(() => setElapsed(e => e + 1), 1000);
+    return () => clearInterval(id);
+  }, [isActive]);
+
+  const mm = String(Math.floor(elapsed / 60)).padStart(2, '0');
+  const ss = String(elapsed % 60).padStart(2, '0');
+
+  // ── Audio playback ───────────────────────────────────────────
+  const audioBufferRef    = useRef<Uint8Array[]>([]);
+  const playbackQueueRef  = useRef(false);
 
   const playNextChunk = useCallback(async () => {
     if (playbackQueueRef.current || audioBufferRef.current.length === 0) return;
@@ -54,22 +54,24 @@ export default function SessionScreen() {
   }, []);
 
   const clearAudio = useCallback(async () => {
-    audioBufferRef.current = [];
+    audioBufferRef.current   = [];
     playbackQueueRef.current = false;
-    isSpeakingRef.current = false;
+    isSpeakingRef.current    = false;
     setUiState('listening');
   }, []);
 
-  // ── WebSocket ─────────────────────────────────────────────────────────────
+  // ── WebSocket ────────────────────────────────────────────────
   const { sendMessage, connected } = useWebSocket({
     sessionId: sessionId!,
-    mode: mode || 'training',
+    mode:   mode   || 'training',
+    accent: accent || undefined,
     onMessage: useCallback(async (msg: any) => {
       switch (msg.type) {
         case 'session_ready':
           setSessionReady(true);
           setIsActive(true);
           setUiState('idle');
+          if (msg.session_id) sessionDbIdRef.current = msg.session_id;
           break;
         case 'tts_chunk':
           audioBufferRef.current.push(base64ToBytes(msg.data));
@@ -93,14 +95,30 @@ export default function SessionScreen() {
         case 'correction_card':
           pushCard(msg.error);
           break;
-        case 'diagnostic_complete':
-          router.push({ pathname: '/(app)/history', params: { highlight: msg.result?.cefr_level } });
+        case 'diagnostic_complete': {
+          const r = msg.result || {};
+          router.push({
+            pathname: '/(app)/diagnostic-results',
+            params: {
+              cefr_level:       r.cefr_level,
+              ielts_equivalent: r.ielts_equivalent != null ? String(r.ielts_equivalent) : undefined,
+              fluency:          r.fluency          != null ? String(r.fluency)          : undefined,
+              lexical:          r.lexical           != null ? String(r.lexical)          : undefined,
+              grammar:          r.grammar           != null ? String(r.grammar)          : undefined,
+              pronunciation:    r.pronunciation     != null ? String(r.pronunciation)    : undefined,
+              strengths:        r.strengths  ? JSON.stringify(r.strengths)  : undefined,
+              weaknesses:       r.weaknesses ? JSON.stringify(r.weaknesses) : undefined,
+              learning_plan:    r.learning_plan,
+              focus_area:       r.focus_area,
+            },
+          });
           break;
+        }
       }
     }, []),
   });
 
-  // ── VAD ───────────────────────────────────────────────────────────────────
+  // ── VAD ──────────────────────────────────────────────────────
   const audioChunksRef = useRef<Uint8Array[]>([]);
 
   const { startVAD, stopVAD } = useVAD({
@@ -140,14 +158,22 @@ export default function SessionScreen() {
 
   const handleEnd = () => {
     sendMessage({ type: 'session_end' });
-    router.replace('/(app)');
+    const dbId = sessionDbIdRef.current;
+    router.replace({
+      pathname: '/(app)/session-end',
+      params: {
+        sessionId: dbId ?? undefined,
+        mode:      mode  ?? 'training',
+        elapsed:   String(elapsed),
+      },
+    });
   };
 
-  const waveMode = uiState === 'speaking' ? 'ai' : uiState === 'listening' ? 'user' : 'idle';
-  const meta = STATE_META[uiState];
+  // Format mode label
+  const modeLabel = (mode || 'TRAINING').split('_').map(w => w[0].toUpperCase() + w.slice(1)).join(' ');
 
   return (
-    <SafeAreaView style={s.container}>
+    <SafeAreaView style={s.root}>
 
       {/* ── Top bar ── */}
       <View style={s.topBar}>
@@ -156,46 +182,64 @@ export default function SessionScreen() {
         </TouchableOpacity>
 
         <View style={s.modeTag}>
-          <Text style={s.modeTagText}>{(mode || 'TRAINING').toUpperCase()}</Text>
+          <Text style={s.modeTagText}>{modeLabel.toUpperCase()}</Text>
         </View>
 
-        <SessionTimer active={isActive} />
+        <View style={s.timerRow}>
+          <View style={[s.timerDot, { backgroundColor: isActive ? T.success : T.muted }]} />
+          <Text style={s.timerText}>{mm}:{ss}</Text>
+        </View>
       </View>
 
-      {/* ── Waveform ── */}
-      <View style={s.waveArea}>
-        <WaveformVisualizer mode={waveMode} />
+      {/* ── Main stage ── */}
+      <View style={s.stage}>
+        {/* Ambient glow when speaking */}
+        {uiState === 'speaking' && (
+          <View style={[s.ambientGlow, { pointerEvents: 'none' }]} />
+        )}
+        {/* Active recording border indicator */}
+        {uiState === 'listening' && (
+          <View style={[s.listeningBorder, { pointerEvents: 'none' }]} />
+        )}
 
-        {/* Status pill */}
-        <View style={s.statusPill}>
-          <View style={[s.statusDot, { backgroundColor: meta.dot }]} />
-          <Text style={s.statusLabel}>{meta.label}</Text>
-        </View>
+        <Waveform state={uiState} />
+        <StatusPill state={uiState} />
+
+        {uiState === 'speaking' && (
+          <Text style={s.interruptHint}>Tap to interrupt</Text>
+        )}
       </View>
 
       {/* ── Reconnect banner ── */}
       {!connected && (
         <View style={s.reconnectBar}>
-          <Text style={s.reconnectText}>Reconnecting...</Text>
+          <Text style={s.reconnectText}>Reconnecting…</Text>
         </View>
       )}
 
-      {/* ── Correction cards ── */}
-      <View style={s.cardsArea} pointerEvents="box-none">
-        {correctionCards.slice(0, 2).map((card, idx) => (
+      {/* ── Correction cards (stacked at bottom) ── */}
+      <View style={[s.cardsArea, { pointerEvents: 'box-none' }]}>
+        {correctionCards.slice(0, 1).map((card) => (
           <CorrectionCard
             key={card.id}
-            card={card}
-            index={idx}
+            correction={{
+              id:          card.id,
+              type:        card.error_type,
+              original:    card.original_utterance,
+              corrected:   card.corrected_form,
+              explanation: card.explanation,
+              full:        card.full_sentence,
+            }}
             onDismiss={() => dismissCard(card.id)}
           />
         ))}
       </View>
+
     </SafeAreaView>
   );
 }
 
-// ── Helpers ────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────
 
 function base64ToBytes(b64: string): Uint8Array {
   const bin = atob(b64);
@@ -215,8 +259,8 @@ function arrayBufferToDataUri(buf: ArrayBuffer): string {
 }
 
 function waitForPlayback(sound: Audio.Sound): Promise<void> {
-  return new Promise((res) => {
-    sound.setOnPlaybackStatusUpdate((st) => {
+  return new Promise(res => {
+    sound.setOnPlaybackStatusUpdate(st => {
       if (st.isLoaded && st.didJustFinish) res();
     });
   });
@@ -237,54 +281,46 @@ function pcmF32leToWav(pcm: Uint8Array, sr: number): ArrayBuffer {
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: C.bg },
+  root: { flex: 1, backgroundColor: T.bg },
 
   topBar: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'android' ? 36 : 12,
+    paddingHorizontal: Spacing.screenH,
+    paddingTop: Platform.OS === 'android' ? 16 : 8,
     paddingBottom: 16,
-    borderBottomWidth: 1, borderBottomColor: C.border,
+    borderBottomWidth: 1, borderBottomColor: T.border,
   },
   endBtn: {
-    paddingHorizontal: 14, paddingVertical: 7,
-    borderRadius: RADIUS.sm,
-    borderWidth: 1, borderColor: C.error + '66',
-    backgroundColor: C.error + '11',
+    height: 34, paddingHorizontal: 14, borderRadius: 10,
+    backgroundColor: T.rose100, alignItems: 'center', justifyContent: 'center',
   },
-  endBtnText: { color: C.error, fontSize: FONT.sm, fontWeight: '600' },
+  endBtnText: { fontFamily: Fonts.semibold, fontSize: 13, color: T.rose600 },
+
   modeTag: {
-    paddingHorizontal: 12, paddingVertical: 5,
-    borderRadius: RADIUS.sm,
-    backgroundColor: C.surface,
-    borderWidth: 1, borderColor: C.border,
+    height: 27, paddingHorizontal: 12, borderRadius: 999,
+    backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center',
   },
-  modeTagText: { color: C.textDim, fontSize: 11, fontWeight: '700', letterSpacing: 1 },
+  modeTagText: { fontFamily: Fonts.bold, fontSize: 10, color: T.slate, letterSpacing: 0.8 },
 
-  waveArea: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 28,
+  timerRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  timerDot: { width: 7, height: 7, borderRadius: 999 },
+  timerText: { fontFamily: Fonts.semibold, fontSize: 13, color: T.charcoal, letterSpacing: -0.2 },
+
+  stage: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 24, position: 'relative' },
+
+  ambientGlow: {
+    position: 'absolute', width: 340, height: 340, borderRadius: 999,
+    backgroundColor: 'rgba(252,231,243,0.7)',
+  },
+  listeningBorder: {
+    position: 'absolute', top: 0, bottom: 0, left: 0, right: 0,
+    borderWidth: 2, borderColor: T.success, borderRadius: 0,
   },
 
-  statusPill: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    paddingHorizontal: 16, paddingVertical: 8,
-    backgroundColor: C.surface,
-    borderRadius: RADIUS.full,
-    borderWidth: 1, borderColor: C.border,
-  },
-  statusDot: { width: 7, height: 7, borderRadius: 4 },
-  statusLabel: { fontSize: FONT.sm, color: C.textSub, fontWeight: '500' },
+  interruptHint: { fontFamily: Fonts.regular, fontSize: 12, color: T.muted, letterSpacing: 0.1 },
 
-  reconnectBar: {
-    backgroundColor: C.blue700, paddingVertical: 8, alignItems: 'center',
-  },
-  reconnectText: { color: C.text, fontSize: FONT.sm },
+  reconnectBar: { backgroundColor: T.rose600, paddingVertical: 8, alignItems: 'center' },
+  reconnectText: { fontFamily: Fonts.semibold, fontSize: 13, color: '#fff' },
 
-  cardsArea: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    padding: 16, gap: 8,
-  },
+  cardsArea: { position: 'absolute', bottom: 0, left: 0, right: 0 },
 });

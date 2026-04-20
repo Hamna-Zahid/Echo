@@ -1,17 +1,16 @@
 {
   "expo": {
-    "name": "EchoCoach",
+    "name": "Echo",
     "slug": "echocoach",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "dark",
+    "scheme": "echocoach",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
     "splash": {
-      "backgroundColor": "#0F172A"
+      "backgroundColor": "#FFFFFF"
     },
-    "assetBundlePatterns": [
-      "**/*"
-    ],
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.echocoach.app",
@@ -22,7 +21,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#0F172A"
+        "backgroundColor": "#FFFFFF"
       },
       "package": "com.echocoach.app",
       "permissions": [
@@ -30,6 +29,9 @@
         "INTERNET",
         "MODIFY_AUDIO_SETTINGS"
       ]
+    },
+    "web": {
+      "bundler": "metro"
     },
     "plugins": [
       "expo-router",
@@ -40,7 +42,6 @@
         }
       ]
     ],
-    "scheme": "echocoach",
     "extra": {
       "eas": {
         "projectId": "your-eas-project-id"

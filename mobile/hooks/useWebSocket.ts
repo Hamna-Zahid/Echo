@@ -6,10 +6,11 @@ const WS_BASE = process.env.EXPO_PUBLIC_BACKEND_WS_URL || 'ws://localhost:8000';
 interface UseWebSocketOptions {
   sessionId: string;
   mode: string;
+  accent?: string;
   onMessage: (msg: any) => void;
 }
 
-export function useWebSocket({ sessionId, mode, onMessage }: UseWebSocketOptions) {
+export function useWebSocket({ sessionId, mode, accent, onMessage }: UseWebSocketOptions) {
   const wsRef = useRef<WebSocket | null>(null);
   const [connected, setConnected] = useState(false);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -19,7 +20,8 @@ export function useWebSocket({ sessionId, mode, onMessage }: UseWebSocketOptions
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.access_token) return;
 
-    const url = `${WS_BASE}/ws/${sessionId}?token=${session.access_token}&mode=${mode}`;
+    const accentParam = accent ? `&accent=${encodeURIComponent(accent)}` : '';
+    const url = `${WS_BASE}/ws/${sessionId}?token=${session.access_token}&mode=${mode}${accentParam}`;
     const ws = new WebSocket(url);
     wsRef.current = ws;
 
