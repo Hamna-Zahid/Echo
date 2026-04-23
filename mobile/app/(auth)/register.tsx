@@ -4,7 +4,7 @@ import {
   KeyboardAvoidingView, Platform, ActivityIndicator,
   Alert, ScrollView,
 } from 'react-native';
-import { router } from 'expo-router';
+import { useRouter} from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import { api } from '../../services/api';
@@ -21,13 +21,22 @@ WebBrowser.maybeCompleteAuthSession();
 const EXAM_OPTIONS = ['IELTS', 'TOEFL', 'Job Interview', 'General English'] as const;
 
 export default function RegisterScreen() {
-  const [email, setEmail]           = useState('');
-  const [password, setPassword]     = useState('');
-  const [showPass, setShowPass]     = useState(false);
-  const [goal, setGoal]             = useState('IELTS');
-  const [accent, setAccent]         = useState<'American' | 'British'>('American');
-  const [loading, setLoading]       = useState(false);
-  const [googleLoading, setGoogle]  = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPass, setShowPass] = useState(false);
+  const [goal, setGoal] = useState('IELTS');
+  const [accent, setAccent] = useState<'American' | 'British'>('American');
+  const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogle] = useState(false);
+  const router = useRouter();
+
+  const handleSignInPress = () => {
+  if (router.canGoBack()) {
+    router.back();
+  } else {
+    router.replace('/(auth)/login'); // fallback route
+  }
+};
 
   // ── Email + password registration ───────────────────────────
   const handleRegister = async () => {
@@ -193,7 +202,7 @@ export default function RegisterScreen() {
 
         <View style={s.bottomRow}>
           <Text style={s.bottomText}>Already have an account?</Text>
-          <TouchableOpacity onPress={() => router.back()}>
+          <TouchableOpacity onPress={handleSignInPress}>
             <Text style={s.bottomLink}> Sign in</Text>
           </TouchableOpacity>
         </View>
@@ -204,23 +213,23 @@ export default function RegisterScreen() {
 }
 
 const s = StyleSheet.create({
-  root:  { flex: 1, backgroundColor: T.bg },
+  root: { flex: 1, backgroundColor: T.bg },
   inner: { paddingHorizontal: Spacing.screenH, paddingTop: 56, paddingBottom: 48 },
 
   logoRow: { marginBottom: 28 },
-  title:   { fontFamily: Fonts.bold, fontSize: 28, color: T.charcoal, letterSpacing: -0.6, marginBottom: 6 },
-  sub:     { fontFamily: Fonts.regular, fontSize: 15, color: T.muted, marginBottom: 24 },
+  title: { fontFamily: Fonts.bold, fontSize: 28, color: T.charcoal, letterSpacing: -0.6, marginBottom: 6 },
+  sub: { fontFamily: Fonts.regular, fontSize: 15, color: T.muted, marginBottom: 24 },
 
   eyeText: { fontFamily: Fonts.semibold, fontSize: 12, color: T.rose400 },
 
-  dividerRow:  { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 },
+  dividerRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 },
   dividerLine: { flex: 1, height: 1, backgroundColor: T.border },
   dividerText: { fontFamily: Fonts.regular, fontSize: 12, color: T.muted, letterSpacing: 0.2 },
 
   chipRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginBottom: 24 },
 
   // Accent selector — each option takes exactly half the row width
-  accentRow:    { flexDirection: 'row', gap: 10, marginBottom: 28 },
+  accentRow: { flexDirection: 'row', gap: 10, marginBottom: 28 },
   accentOption: {
     flex: 1,
     flexDirection: 'row',
@@ -233,13 +242,13 @@ const s = StyleSheet.create({
   },
   accentLabel: { fontSize: 14, flexShrink: 1 },
 
-  btnWrap:    { marginBottom: 16 },
+  btnWrap: { marginBottom: 16 },
   btnLoading: {
     height: 56, borderRadius: Radius.button, backgroundColor: T.rose600,
     alignItems: 'center', justifyContent: 'center',
   },
 
-  bottomRow:  { flexDirection: 'row', justifyContent: 'center' },
+  bottomRow: { flexDirection: 'row', justifyContent: 'center' },
   bottomText: { fontFamily: Fonts.regular, fontSize: 14, color: T.muted },
   bottomLink: { fontFamily: Fonts.semibold, fontSize: 14, color: T.rose600 },
 });
