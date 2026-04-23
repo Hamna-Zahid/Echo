@@ -134,6 +134,32 @@ User speaks  →  Silero VAD detects end-of-speech
 
 ---
 
+
+---
+
+## 🛠️ Run Locally
+
+Follow these steps to run Echo on your machine.
+
+### 🔧 Backend Setup (FastAPI)
+
+```bash
+cd backend
+python -m venv venv
+venv\Scripts\activate   # Windows
+pip install -r requirements.txt
+uvicorn main:app --reload
+```
+Check: curl http://localhost:8000/health should return {"status":"ok"}
+
+### 📱 Mobile Setup (React Native + Expo)
+
+```bash
+cd mobile
+npm install
+npx expo start
+```
+
 ## Deployment (Production)
 
 ### Backend on Railway
