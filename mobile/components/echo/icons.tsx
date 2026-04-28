@@ -23,6 +23,14 @@ export const IconHome = ({ color = 'currentColor', size = 20 }: IconProps) => (
   </Svg>
 );
 
+export const IconAlert = ({ color = '#dc2626', size = 12 }: IconProps) => (
+  <Svg width={size} height={size} viewBox="0 0 14 14" fill="none">
+    <Path d="M7 1.5L12.3 11.5H1.7L7 1.5Z" stroke={color} strokeWidth="1.4" strokeLinejoin="round"/>
+    <Path d="M7 5V8" stroke={color} strokeWidth="1.4" strokeLinecap="round" />
+    <Path d="M7 10.5H7.01" stroke={color} strokeWidth="1.4" strokeLinecap="round"/>
+  </Svg>
+);
+
 export const IconCheck = ({ color = 'currentColor', size = 16 }: IconProps) => (
   <Svg width={size} height={size} viewBox="0 0 16 16" fill="none">
     <Path d="M2 8l4.5 4.5L14 3.5" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -138,3 +146,4 @@ export const EchoLogoMark = ({ size = 32 }: { size?: number }) => (
     <Rect x="15.2" y="5.5" width="2.2" height="3"  rx="1.1" fill="white" fillOpacity="0.45"/>
   </Svg>
 );
+

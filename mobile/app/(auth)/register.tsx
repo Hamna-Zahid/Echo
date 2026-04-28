@@ -4,7 +4,7 @@ import {
   KeyboardAvoidingView, Platform, ActivityIndicator,
   Alert, ScrollView,
 } from 'react-native';
-import { useRouter} from 'expo-router';
+import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import { api } from '../../services/api';
@@ -14,6 +14,7 @@ import {
   EchoLogo, EchoButton, EchoInput,
   EchoChip, MicroLabel, AccentChip, GoogleSignInButton,
 } from '../../components/echo/shared';
+import { IconAlert } from '@/components/echo/icons';
 
 // Required by expo-web-browser to complete OAuth redirect back into the app
 WebBrowser.maybeCompleteAuthSession();
@@ -21,6 +22,8 @@ WebBrowser.maybeCompleteAuthSession();
 const EXAM_OPTIONS = ['IELTS', 'TOEFL', 'Job Interview', 'General English'] as const;
 
 export default function RegisterScreen() {
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
@@ -30,39 +33,53 @@ export default function RegisterScreen() {
   const [googleLoading, setGoogle] = useState(false);
   const router = useRouter();
 
+  const validateEmail = (value: string) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!value.trim()) return 'Email is required';
+    if (!emailRegex.test(value)) return 'Enter a valid email address';
+    return '';
+  };
+
+  const validatePassword = (value: string) => {
+    if (!value) return 'Password is required';
+    if (value.length < 6) return 'Password must be at least 6 characters';
+    return '';
+  };
+
   const handleSignInPress = () => {
-  if (router.canGoBack()) {
-    router.back();
-  } else {
-    router.replace('/(auth)/login'); // fallback route
-  }
-};
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(auth)/login'); // fallback route
+    }
+  };
 
   // ── Email + password registration ───────────────────────────
   const handleRegister = async () => {
-    if (!email.trim() || !password.trim()) {
-      Alert.alert('Required', 'Fill in all fields.');
-      return;
-    }
-    if (password.length < 8) {
-      Alert.alert('Too short', 'Password must be at least 8 characters.');
-      return;
-    }
+    const emailErr = validateEmail(email);
+    const passErr = validatePassword(password);
+
+    setEmailError(emailErr);
+    setPasswordError(passErr);
+
+    if (emailErr || passErr) return;
+
     setLoading(true);
     try {
-      // Step 1: Create account via backend (creates profile row in users table)
       await api.post('/auth/register', {
         email: email.trim(),
         password,
         target_exam: goal,
         preferred_accent: accent.toLowerCase(),
       });
-      // Step 2: Sign in with Supabase to get a full persisted session
+
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password,
       });
+
       if (signInError) throw new Error(signInError.message);
+
       router.replace('/(auth)/post-reg');
     } catch (e: any) {
       Alert.alert('Registration failed', e.message);
@@ -132,13 +149,21 @@ export default function RegisterScreen() {
           <EchoInput
             placeholder="Email address"
             value={email}
-            onChangeText={setEmail}
+            onChangeText={(text) => {
+              setEmail(text);
+              if (emailError) setEmailError('');
+            }}
             keyboardType="email-address"
           />
+
+          {emailError ? (<View style={s.errorRow}> <IconAlert size={12} /> <Text style={s.errorText}>{emailError}</Text> </View>) : null}
           <EchoInput
-            placeholder="Password (min. 8 characters)"
+            placeholder="Password (min. 6 characters)"
             value={password}
-            onChangeText={setPassword}
+            onChangeText={(text) => {
+              setPassword(text);
+              if (passwordError) setPasswordError('');
+            }}
             secureTextEntry={!showPass}
             rightIcon={
               <TouchableOpacity
@@ -149,8 +174,8 @@ export default function RegisterScreen() {
               </TouchableOpacity>
             }
           />
-        </View>
 
+          {passwordError ? ( <View style={s.errorRow}> <IconAlert size={12} /> <Text style={s.errorText}>{passwordError}</Text> </View>) : null} </View>
         {/* Goal chips */}
         <MicroLabel style={{ marginBottom: 10 }}>Your Goal</MicroLabel>
         <View style={s.chipRow}>
@@ -251,4 +276,13 @@ const s = StyleSheet.create({
   bottomRow: { flexDirection: 'row', justifyContent: 'center' },
   bottomText: { fontFamily: Fonts.regular, fontSize: 14, color: T.muted },
   bottomLink: { fontFamily: Fonts.semibold, fontSize: 14, color: T.rose600 },
+
+  errorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
+    marginLeft: 4,
+  },
+  errorText: { color: '#dc2626', fontSize: 12, fontFamily: Fonts.regular, },
 });
