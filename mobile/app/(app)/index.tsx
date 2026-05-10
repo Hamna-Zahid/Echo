@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  ScrollView, ActivityIndicator, Platform,
+  ScrollView, ActivityIndicator,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '../../services/supabase';
@@ -36,20 +37,28 @@ function getGreeting() {
 }
 
 export default function HomeScreen() {
-  const [user, setUser]       = useState<any>(null);
-  const [progress, setProgress] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const insets = useSafeAreaInsets();
+  const [user, setUser]           = useState<any>(null);
+  const [progress, setProgress]   = useState<any>(null);
+  const [loading, setLoading]     = useState(true);
+  const [offline, setOffline]     = useState(false);
 
   useEffect(() => { loadData(); }, []);
 
   const loadData = async () => {
+    // Auth is always fetched — it's Supabase, not the local backend
     try {
       const { data: { user: u } } = await supabase.auth.getUser();
       setUser(u);
+    } catch (_) {}
+
+    // Progress comes from the local backend — may be unreachable on first load
+    try {
       const data = await api.get('/sessions/progress/summary');
       setProgress(data);
-    } catch (e) {
-      console.error('Home data failed', e);
+      setOffline(false);
+    } catch (_) {
+      setOffline(true);   // show banner, don't block the rest of the UI
     } finally {
       setLoading(false);
     }
@@ -83,7 +92,7 @@ export default function HomeScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: T.bgSubtle }}>
-    <ScrollView style={s.root} contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
+    <ScrollView style={s.root} contentContainerStyle={[s.content, { paddingTop: insets.top }]} showsVerticalScrollIndicator={false}>
 
       {/* ── Header ── */}
       <View style={s.header}>
@@ -98,6 +107,13 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* ── Offline banner ── */}
+      {offline && (
+        <TouchableOpacity onPress={loadData} style={s.offlineBanner}>
+          <Text style={s.offlineText}>⚠ Backend unreachable — tap to retry</Text>
+        </TouchableOpacity>
+      )}
 
       {/* ── Level card ── */}
       <TouchableOpacity activeOpacity={0.9} onPress={() => router.push('/(app)/history')} style={{ marginBottom: 24 }}>
@@ -217,7 +233,7 @@ export default function HomeScreen() {
 
 const s = StyleSheet.create({
   root:    { flex: 1, backgroundColor: T.bgSubtle },
-  content: { paddingTop: Platform.OS === 'ios' ? 56 : 44, paddingBottom: 48, paddingHorizontal: Spacing.screenH },
+  content: { paddingBottom: 48, paddingHorizontal: Spacing.screenH },
 
   // Header
   header:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20, backgroundColor: T.bg, marginHorizontal: -Spacing.screenH, paddingHorizontal: Spacing.screenH, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: T.border },
@@ -258,6 +274,10 @@ const s = StyleSheet.create({
   modeBadge:   { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 999 },
   modeBadgeText: { fontFamily: Fonts.bold, fontSize: 10, letterSpacing: 0.2 },
   modeDesc:    { fontFamily: Fonts.regular, fontSize: 12, color: T.muted },
+
+  // Offline
+  offlineBanner: { backgroundColor: '#FEF3C7', borderWidth: 1, borderColor: '#FCD34D', borderRadius: 12, paddingVertical: 10, paddingHorizontal: 14, marginBottom: 16, alignItems: 'center' },
+  offlineText:   { fontFamily: Fonts.medium, fontSize: 13, color: '#92400E' },
 
   // Recent
   recentRow:      { backgroundColor: T.bg, borderWidth: 1, borderColor: T.borderStrong, borderRadius: 13, padding: 11, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 10 },

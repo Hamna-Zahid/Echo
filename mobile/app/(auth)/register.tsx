@@ -4,7 +4,8 @@ import {
   KeyboardAvoidingView, Platform, ActivityIndicator,
   Alert, ScrollView,
 } from 'react-native';
-import { useRouter} from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import { api } from '../../services/api';
@@ -21,27 +22,20 @@ WebBrowser.maybeCompleteAuthSession();
 const EXAM_OPTIONS = ['IELTS', 'TOEFL', 'Job Interview', 'General English'] as const;
 
 export default function RegisterScreen() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPass, setShowPass] = useState(false);
-  const [goal, setGoal] = useState('IELTS');
-  const [accent, setAccent] = useState<'American' | 'British'>('American');
-  const [loading, setLoading] = useState(false);
-  const [googleLoading, setGoogle] = useState(false);
-  const router = useRouter();
-
-  const handleSignInPress = () => {
-  if (router.canGoBack()) {
-    router.back();
-  } else {
-    router.replace('/(auth)/login'); // fallback route
-  }
-};
+  const insets = useSafeAreaInsets();
+  const [name, setName]             = useState('');
+  const [email, setEmail]           = useState('');
+  const [password, setPassword]     = useState('');
+  const [showPass, setShowPass]     = useState(false);
+  const [goal, setGoal]             = useState('IELTS');
+  const [accent, setAccent]         = useState<'American' | 'British'>('American');
+  const [loading, setLoading]       = useState(false);
+  const [googleLoading, setGoogle]  = useState(false);
 
   // ── Email + password registration ───────────────────────────
   const handleRegister = async () => {
-    if (!email.trim() || !password.trim()) {
-      Alert.alert('Required', 'Fill in all fields.');
+    if (!name.trim() || !email.trim() || !password.trim()) {
+      Alert.alert('Required', 'Please fill in your name, email, and password.');
       return;
     }
     if (password.length < 8) {
@@ -52,6 +46,7 @@ export default function RegisterScreen() {
     try {
       // Step 1: Create account via backend (creates profile row in users table)
       await api.post('/auth/register', {
+        full_name: name.trim(),
         email: email.trim(),
         password,
         target_exam: goal,
@@ -106,7 +101,7 @@ export default function RegisterScreen() {
 
   return (
     <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView contentContainerStyle={s.inner} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={[s.inner, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 24 }]} keyboardShouldPersistTaps="handled">
 
         <View style={s.logoRow}>
           <EchoLogo size={30} />
@@ -127,8 +122,14 @@ export default function RegisterScreen() {
           <View style={s.dividerLine} />
         </View>
 
-        {/* Email + password */}
+        {/* Name + email + password */}
         <View style={{ gap: 12, marginBottom: 24 }}>
+          <EchoInput
+            placeholder="Your full name"
+            value={name}
+            onChangeText={setName}
+            autoCapitalize="words"
+          />
           <EchoInput
             placeholder="Email address"
             value={email}
@@ -202,7 +203,7 @@ export default function RegisterScreen() {
 
         <View style={s.bottomRow}>
           <Text style={s.bottomText}>Already have an account?</Text>
-          <TouchableOpacity onPress={handleSignInPress}>
+          <TouchableOpacity onPress={() => router.replace('/(auth)/login')}>
             <Text style={s.bottomLink}> Sign in</Text>
           </TouchableOpacity>
         </View>
@@ -213,8 +214,8 @@ export default function RegisterScreen() {
 }
 
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: T.bg },
-  inner: { paddingHorizontal: Spacing.screenH, paddingTop: 56, paddingBottom: 48 },
+  root:  { flex: 1, backgroundColor: T.bg },
+  inner: { paddingHorizontal: Spacing.screenH },
 
   logoRow: { marginBottom: 28 },
   title: { fontFamily: Fonts.bold, fontSize: 28, color: T.charcoal, letterSpacing: -0.6, marginBottom: 6 },

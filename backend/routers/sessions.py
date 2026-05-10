@@ -1,20 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, Header
+from fastapi import APIRouter, Depends, HTTPException
 from typing import Optional
 from datetime import date, datetime, timezone, timedelta
 
-from db.supabase import get_supabase, verify_token
+from db.supabase import get_supabase, get_current_user
 
 router = APIRouter()
-
-
-async def get_current_user(authorization: Optional[str] = Header(None)):
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing or invalid authorization header")
-    token = authorization.split(" ", 1)[1]
-    user = verify_token(token)
-    if not user:
-        raise HTTPException(status_code=401, detail="Invalid token")
-    return user
 
 
 def _compute_streak(sessions: list) -> int:

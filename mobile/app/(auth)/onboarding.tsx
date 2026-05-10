@@ -1,8 +1,9 @@
 import { useRef, useState } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity,
-  Animated, ScrollView, Platform,
+  View, Text, StyleSheet, TouchableOpacity, Platform,
+  Animated, ScrollView,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { T, Fonts, Spacing, Shadow } from '../../constants/tokens';
@@ -98,6 +99,7 @@ function Slide2() {
 const SLIDES = [Slide0, Slide1, Slide2];
 
 export default function OnboardingScreen() {
+  const insets = useSafeAreaInsets();
   const [slide, setSlide] = useState(0);
   const fadeAnim = useRef(new Animated.Value(1)).current;
 
@@ -119,7 +121,7 @@ export default function OnboardingScreen() {
   return (
     <View style={s.root}>
       {/* Persistent logo — always visible across all slides */}
-      <View style={s.logoBar}>
+      <View style={[s.logoBar, { paddingTop: insets.top + 12 }]}>
         <EchoLogo size={26} />
       </View>
 
@@ -195,7 +197,7 @@ const sl = StyleSheet.create({
 // ── Screen styles ────────────────────────────────────────────
 const s = StyleSheet.create({
   root:          { flex: 1, backgroundColor: T.bg },
-  logoBar:       { paddingHorizontal: Spacing.screenH, paddingTop: Platform.OS === 'ios' ? 56 : 44, paddingBottom: 12 },
+  logoBar:       { paddingHorizontal: Spacing.screenH, paddingBottom: 12 },
   scrollContent: { flexGrow: 1 },
 
   dots: { flexDirection: 'row', justifyContent: 'center', gap: 7, paddingVertical: 20 },

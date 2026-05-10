@@ -1,8 +1,8 @@
-from fastapi import APIRouter, HTTPException, Header
-from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException
+from typing import Literal, Optional
 from pydantic import BaseModel
 
-from db.supabase import get_supabase, verify_token
+from db.supabase import get_supabase, get_admin_client, get_current_user
 
 router = APIRouter()
 
@@ -10,8 +10,9 @@ router = APIRouter()
 class RegisterRequest(BaseModel):
     email: str
     password: str
-    target_exam: str = "IELTS"
-    preferred_accent: str = "american"
+    full_name: str = ""
+    target_exam: Literal["IELTS", "TOEFL", "INTERVIEW", "General English"] = "IELTS"
+    preferred_accent: Literal["american", "british"] = "american"
 
 
 class LoginRequest(BaseModel):
@@ -19,22 +20,52 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class ProfileUpdateRequest(BaseModel):
+    cefr_level: Optional[Literal["A1", "A2", "B1", "B2", "C1", "C2"]] = None
+    target_exam: Optional[Literal["IELTS", "TOEFL", "INTERVIEW", "General English"]] = None
+    preferred_accent: Optional[Literal["american", "british"]] = None
+    goal: Optional[str] = None
+
+
 @router.post("/register")
 async def register(req: RegisterRequest):
     supabase = get_supabase()
     try:
-        res = supabase.auth.sign_up({"email": req.email, "password": req.password})
+        # admin.create_user with email_confirm=True guarantees the auth.users row
+        # is fully committed before we touch public.users — sign_up() via service
+        # role key leaves the row in a pending state that breaks the FK insert.
+        res = supabase.auth.admin.create_user({
+            "email": req.email,
+            "password": req.password,
+            "email_confirm": True,
+        })
         if res.user is None:
             raise HTTPException(status_code=400, detail="Registration failed")
 
         user_id = res.user.id
-        supabase.table("users").insert({
+
+        # Upsert profile fields onto the row the trigger already created.
+        upsert_data = {
             "id": user_id,
             "target_exam": req.target_exam,
             "preferred_accent": req.preferred_accent,
-        }).execute()
+        }
+        if req.full_name:
+            upsert_data["full_name"] = req.full_name
+        supabase.table("users").upsert(upsert_data, on_conflict="id").execute()
 
-        return {"user_id": user_id, "access_token": res.session.access_token if res.session else None}
+        # Sign the user in to return a usable session token immediately.
+        sign_in = supabase.auth.sign_in_with_password({
+            "email": req.email,
+            "password": req.password,
+        })
+
+        return {
+            "user_id": user_id,
+            "access_token": sign_in.session.access_token if sign_in.session else None,
+        }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -50,6 +81,8 @@ async def login(req: LoginRequest):
             "access_token": res.session.access_token,
             "user_id": res.user.id,
         }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=401, detail=str(e))
 
@@ -61,60 +94,45 @@ async def logout():
     return {"status": "logged out"}
 
 
-class ProfileUpdateRequest(BaseModel):
-    cefr_level: Optional[str] = None
-    target_exam: Optional[str] = None
-    preferred_accent: Optional[str] = None
-    goal: Optional[str] = None
-
-
 @router.patch("/profile")
 async def update_profile(
     req: ProfileUpdateRequest,
-    authorization: Optional[str] = Header(None),
+    user: dict = Depends(get_current_user),
 ):
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing token")
-    token = authorization.split(" ", 1)[1]
-    user = verify_token(token)
-    if not user:
-        raise HTTPException(status_code=401, detail="Invalid token")
-
     supabase = get_supabase()
-    updates = {k: v for k, v in req.dict().items() if v is not None}
+    updates = {k: v for k, v in req.model_dump().items() if v is not None}
     if not updates:
         return {"status": "no changes"}
-
     supabase.table("users").update(updates).eq("id", user["id"]).execute()
     return {"status": "updated"}
 
 
-@router.delete("/account")
-async def delete_account(authorization: Optional[str] = Header(None)):
-    """
-    Permanently delete the authenticated user's account and all their data.
-    Cascade deletes handle sessions/errors via FK constraints.
-    After this call the client should sign out and redirect to login.
-    """
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing token")
-    token = authorization.split(" ", 1)[1]
-    user = verify_token(token)
-    if not user:
-        raise HTTPException(status_code=401, detail="Invalid token")
-
+@router.get("/profile")
+async def get_profile(user: dict = Depends(get_current_user)):
     supabase = get_supabase()
+    res = supabase.table("users").select("*").eq("id", user["id"]).single().execute()
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    return res.data
+
+
+@router.delete("/account")
+async def delete_account(user: dict = Depends(get_current_user)):
+    """
+    Permanently delete the authenticated user's account and all data.
+    FK cascades handle sessions, errors, and learning_plans automatically.
+    """
+    # Fresh admin client — the singleton was mutated by verify_token's get_user() call.
+    admin = get_admin_client()
     user_id = user["id"]
 
     try:
-        # Delete user profile row (FK cascades remove sessions, errors, learning_plans)
-        supabase.table("users").delete().eq("id", user_id).execute()
+        admin.table("users").delete().eq("id", user_id).execute()
     except Exception:
-        pass  # Row may not exist (new user who never completed onboarding)
+        pass  # Row may not exist for brand-new users
 
     try:
-        # Delete from Supabase Auth — requires service role key
-        supabase.auth.admin.delete_user(user_id)
+        admin.auth.admin.delete_user(user_id)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Auth deletion failed: {str(e)}")
 

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import {
   View, Text, ScrollView, StyleSheet,
-  TouchableOpacity, ActivityIndicator, Platform,
+  TouchableOpacity, ActivityIndicator,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import Svg, { Path, Circle, Text as SvgText, Line } from 'react-native-svg';
 import { api } from '../../services/api';
@@ -38,6 +39,7 @@ const ERROR_TYPE_COLORS: Record<string, { color: string; bg: string }> = {
 };
 
 export default function HistoryScreen() {
+  const insets = useSafeAreaInsets();
   const { highlight } = useLocalSearchParams<{ highlight?: string }>();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [errors, setErrors]     = useState<any[]>([]);
@@ -93,7 +95,7 @@ export default function HistoryScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: T.bgSubtle }}>
-    <ScrollView style={s.root} contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
+    <ScrollView style={s.root} contentContainerStyle={[s.content, { paddingTop: insets.top }]} showsVerticalScrollIndicator={false}>
 
       {/* Header */}
       <View style={s.header}>
@@ -237,7 +239,7 @@ export default function HistoryScreen() {
 
 const s = StyleSheet.create({
   root:    { flex: 1, backgroundColor: T.bgSubtle },
-  content: { paddingHorizontal: Spacing.screenH, paddingTop: Platform.OS === 'ios' ? 56 : 44, paddingBottom: 48 },
+  content: { paddingHorizontal: Spacing.screenH, paddingBottom: 48 },
 
   header:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, backgroundColor: T.bg, marginHorizontal: -Spacing.screenH, paddingHorizontal: Spacing.screenH, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: T.border },
   backBtn:   { width: 36, height: 36, borderRadius: 10, backgroundColor: T.bgSubtle, borderWidth: 1, borderColor: T.border, alignItems: 'center', justifyContent: 'center' },

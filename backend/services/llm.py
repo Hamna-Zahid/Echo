@@ -1,41 +1,53 @@
 """
-LLM service — Groq API wrapper.
+LLM service — OpenAI GPT-4o primary, Groq fallback.
 
 Model routing:
-  Conversation    → llama-3.1-8b-instant   (lowest latency, < 150ms first token target)
-  Correction      → gemma2-9b-it           (best instruction following for JSON output)
-  Diagnostic score→ llama-3.3-70b-versatile (best accuracy for rubric-grounded scoring)
+  Conversation    → gpt-4o               (best instruction following, nuanced conversation)
+  Correction      → gpt-4o-mini          (fast + cheap JSON, reliable schema adherence)
+  Diagnostic      → gpt-4o               (best rubric-grounded scoring accuracy)
 
-All streaming responses yield tokens immediately — never buffer.
-Non-streaming calls (correction, diagnostic) are fire-and-forget with tight timeouts.
+Groq (llama-3.3-70b-versatile) is kept as a silent fallback for all calls
+in case OpenAI quota or connectivity fails — session never drops.
+
+STT is handled separately in stt.py (Groq Whisper — stays unchanged).
 """
 
 import json
 import os
 from typing import AsyncGenerator
 
+from openai import AsyncOpenAI
 from groq import AsyncGroq
 
-_client: AsyncGroq | None = None
+# ── Clients (lazy-initialised) ────────────────────────────────────────────────
+_openai_client: AsyncOpenAI | None = None
+_groq_client: AsyncGroq | None = None
 
-# ── Model selection ──────────────────────────────────────────────────────────
-CONVERSATION_MODEL = "llama-3.1-8b-instant"     # ~100ms first token on Groq
-CORRECTION_MODEL   = "gemma2-9b-it"              # excellent JSON instruction following
-DIAGNOSTIC_MODEL   = "llama-3.3-70b-versatile"  # highest accuracy for scoring
 
-# Fallback models if primary quota exceeded
-CONVERSATION_FALLBACK = "llama3-8b-8192"
-CORRECTION_FALLBACK   = "llama3-8b-8192"
+def get_openai_client() -> AsyncOpenAI:
+    global _openai_client
+    if _openai_client is None:
+        _openai_client = AsyncOpenAI(api_key=os.environ["OPENAI_API_KEY"])
+    return _openai_client
 
 
 def get_groq_client() -> AsyncGroq:
-    global _client
-    if _client is None:
-        _client = AsyncGroq(api_key=os.environ["GROQ_API_KEY"])
-    return _client
+    global _groq_client
+    if _groq_client is None:
+        _groq_client = AsyncGroq(api_key=os.environ["GROQ_API_KEY"])
+    return _groq_client
 
 
-# ── Stream B: Conversation ───────────────────────────────────────────────────
+# ── Model selection ───────────────────────────────────────────────────────────
+CONVERSATION_MODEL  = "gpt-4o"        # primary: best conversational intelligence
+CORRECTION_MODEL    = "gpt-4o-mini"   # fast + cheap for JSON correction schema
+DIAGNOSTIC_MODEL    = "gpt-4o"        # best for rubric-grounded IELTS scoring
+
+GROQ_FALLBACK_CONV  = "llama-3.3-70b-versatile"
+GROQ_FALLBACK_FAST  = "llama-3.1-8b-instant"
+
+
+# ── Stream B: Conversation ────────────────────────────────────────────────────
 
 async def stream_conversation(
     system_prompt: str,
@@ -43,142 +55,129 @@ async def stream_conversation(
     state: dict,
 ) -> AsyncGenerator[str, None]:
     """
-    Stream Llama 3.1 8B tokens for live conversation response.
-    Target: < 150ms first token.
-    Yields tokens one by one — ws.py accumulates into sentence chunks for TTS.
+    Stream GPT-4o tokens for live conversation response.
+    Full session history passed so the model never repeats a question.
+    Falls back to Groq llama-3.3-70b if OpenAI is unavailable.
     """
-    client = get_groq_client()
-
     history = state.get("conversation_history", [])
+
     messages = [{"role": "system", "content": system_prompt}]
 
-    # Last 8 turns (4 exchanges) — enough context, low token overhead
-    for turn in history[-8:]:
+    # Full session history (capped at 40 turns = 20 exchanges)
+    for turn in history[-40:]:
         if turn.get("role") and turn.get("content"):
             messages.append({"role": turn["role"], "content": turn["content"]})
 
-    # Append current user message if not already last
+    # Add current user message if not already the last item in history
     if not history or history[-1].get("role") != "user":
         messages.append({"role": "user", "content": user_message})
 
+    # ── Primary: GPT-4o ──────────────────────────────────────────────────────
     try:
+        client = get_openai_client()
         stream = await client.chat.completions.create(
             model=CONVERSATION_MODEL,
             messages=messages,
             stream=True,
-            max_tokens=120,   # ~2-3 sentences — keeps TTS latency low
-            temperature=0.75,
-            top_p=0.9,
+            max_tokens=160,
+            temperature=0.8,
+            top_p=0.95,
+        )
+        async for chunk in stream:
+            delta = chunk.choices[0].delta
+            if delta and delta.content:
+                yield delta.content
+        return
+
+    except Exception:
+        pass  # fall through to Groq
+
+    # ── Fallback: Groq llama-3.3-70b ─────────────────────────────────────────
+    try:
+        groq = get_groq_client()
+        stream = await groq.chat.completions.create(
+            model=GROQ_FALLBACK_CONV,
+            messages=messages,
+            stream=True,
+            max_tokens=160,
+            temperature=0.8,
         )
         async for chunk in stream:
             delta = chunk.choices[0].delta
             if delta and delta.content:
                 yield delta.content
 
-    except Exception as e:
-        # Fallback: try legacy model
-        try:
-            stream = await client.chat.completions.create(
-                model=CONVERSATION_FALLBACK,
-                messages=messages,
-                stream=True,
-                max_tokens=120,
-                temperature=0.75,
-            )
-            async for chunk in stream:
-                delta = chunk.choices[0].delta
-                if delta and delta.content:
-                    yield delta.content
-        except Exception:
-            yield "I missed that — could you say that again?"
+    except Exception:
+        yield "I missed that — could you say that again?"
 
 
-# ── Stream C: Correction check ───────────────────────────────────────────────
+# ── Stream C: Correction check ────────────────────────────────────────────────
 
 async def stream_correction_check(utterance: str) -> dict | None:
     """
-    Grammar error check using Gemma 2 9B.
-    Must complete within 500ms budget — ws.py enforces asyncio.timeout(0.5).
+    Grammar/error check using GPT-4o-mini.
+    Must complete within 500ms budget (enforced by ws.py asyncio.timeout).
     Returns None on any error — never blocks Stream B.
-
-    Uses gemma2-9b-it which consistently follows structured JSON instructions
-    and has very low latency on Groq's infrastructure.
     """
     from prompts.correction import CORRECTION_SYSTEM
 
-    client = get_groq_client()
+    clean = _preprocess_utterance(utterance)
+    if not clean or len(clean.split()) < 4:
+        return None
 
-    # Strip filler noise before sending to correction model
-    clean_utterance = _preprocess_utterance(utterance)
-    if not clean_utterance or len(clean_utterance.split()) < 4:
-        return None  # Too short to meaningfully correct
-
+    # ── Primary: GPT-4o-mini ─────────────────────────────────────────────────
     try:
+        client = get_openai_client()
         response = await client.chat.completions.create(
             model=CORRECTION_MODEL,
             messages=[
                 {"role": "system", "content": CORRECTION_SYSTEM},
-                {"role": "user", "content": clean_utterance},
+                {"role": "user", "content": clean},
             ],
             stream=False,
-            max_tokens=180,
-            temperature=0.05,   # Near-deterministic for consistent JSON
+            max_tokens=200,
+            temperature=0.0,
             response_format={"type": "json_object"},
         )
-        content = response.choices[0].message.content
-        result = json.loads(content)
-
-        # Validate schema — don't let malformed JSON crash Stream B
-        if not isinstance(result, dict):
+        result = json.loads(response.choices[0].message.content)
+        if not isinstance(result, dict) or not result.get("error"):
             return None
-        if not result.get("error"):
-            return None  # No error found — return None (not {"error": false})
         return result
 
     except Exception:
-        # Try fallback model once
-        try:
-            response = await client.chat.completions.create(
-                model=CORRECTION_FALLBACK,
-                messages=[
-                    {"role": "system", "content": CORRECTION_SYSTEM},
-                    {"role": "user", "content": clean_utterance},
-                ],
-                stream=False,
-                max_tokens=180,
-                temperature=0.05,
-                response_format={"type": "json_object"},
-            )
-            content = response.choices[0].message.content
-            result = json.loads(content)
-            if not result.get("error"):
-                return None
-            return result
-        except Exception:
+        pass
+
+    # ── Fallback: Groq 8B ────────────────────────────────────────────────────
+    try:
+        groq = get_groq_client()
+        response = await groq.chat.completions.create(
+            model=GROQ_FALLBACK_FAST,
+            messages=[
+                {"role": "system", "content": CORRECTION_SYSTEM},
+                {"role": "user", "content": clean},
+            ],
+            stream=False,
+            max_tokens=200,
+            temperature=0.0,
+            response_format={"type": "json_object"},
+        )
+        result = json.loads(response.choices[0].message.content)
+        if not isinstance(result, dict) or not result.get("error"):
             return None
+        return result
+
+    except Exception:
+        return None
 
 
-def _preprocess_utterance(text: str) -> str:
-    """Clean Whisper transcript before sending to correction model."""
-    text = text.strip()
-    # Remove leading hesitation sounds that Whisper sometimes transcribes literally
-    for filler in ["um,", "uh,", "hmm,", "er,"]:
-        if text.lower().startswith(filler):
-            text = text[len(filler):].strip()
-    return text
-
-
-# ── Diagnostic scoring ───────────────────────────────────────────────────────
+# ── Diagnostic scoring ────────────────────────────────────────────────────────
 
 async def stream_diagnostic_score(transcript: str) -> dict | None:
     """
-    Full IELTS diagnostic scoring using Llama 3.3 70B.
+    Full IELTS diagnostic scoring using GPT-4o.
     Called once after the full 5-turn diagnostic conversation.
-    Uses the rubric-grounded DIAGNOSTIC_SCORING_SYSTEM prompt.
     """
     from prompts.diagnostic import DIAGNOSTIC_SCORING_SYSTEM
-
-    client = get_groq_client()
 
     if not transcript or len(transcript.strip()) < 50:
         return None
@@ -190,7 +189,9 @@ async def stream_diagnostic_score(transcript: str) -> dict | None:
         f"Return the JSON assessment now."
     )
 
+    # ── Primary: GPT-4o ──────────────────────────────────────────────────────
     try:
+        client = get_openai_client()
         response = await client.chat.completions.create(
             model=DIAGNOSTIC_MODEL,
             messages=[
@@ -199,51 +200,110 @@ async def stream_diagnostic_score(transcript: str) -> dict | None:
             ],
             stream=False,
             max_tokens=600,
-            temperature=0.1,   # Low temperature = consistent, rubric-anchored scores
+            temperature=0.1,
             response_format={"type": "json_object"},
         )
-        content = response.choices[0].message.content
-        result = json.loads(content)
+        result = json.loads(response.choices[0].message.content)
+        return _validate_diagnostic(result)
 
-        # Validate required fields
-        required = ["cefr_level", "ielts_equivalent", "fluency", "lexical", "grammar", "pronunciation"]
-        if not all(k in result for k in required):
-            return None
+    except Exception:
+        pass
 
-        # Clamp scores to valid IELTS range
-        for field in ["ielts_equivalent", "fluency", "lexical", "grammar", "pronunciation"]:
-            if field in result:
-                result[field] = max(0.0, min(9.0, float(result[field])))
-
-        return result
+    # ── Fallback: Groq 70B ───────────────────────────────────────────────────
+    try:
+        groq = get_groq_client()
+        response = await groq.chat.completions.create(
+            model=GROQ_FALLBACK_CONV,
+            messages=[
+                {"role": "system", "content": DIAGNOSTIC_SCORING_SYSTEM},
+                {"role": "user", "content": scoring_request},
+            ],
+            stream=False,
+            max_tokens=600,
+            temperature=0.1,
+            response_format={"type": "json_object"},
+        )
+        result = json.loads(response.choices[0].message.content)
+        return _validate_diagnostic(result)
 
     except Exception:
         return None
 
 
-# ── Vocabulary enhancement (optional — used by training mode) ────────────────
+def _validate_diagnostic(result: dict) -> dict | None:
+    required = ["cefr_level", "ielts_equivalent", "fluency", "lexical", "grammar", "pronunciation"]
+    if not all(k in result for k in required):
+        return None
+    for field in ["ielts_equivalent", "fluency", "lexical", "grammar", "pronunciation"]:
+        if field in result:
+            result[field] = max(0.0, min(9.0, float(result[field])))
+    return result
 
-async def get_vocabulary_suggestion(phrase: str, cefr_target: str = "B2") -> str | None:
+
+# ── Memory insight extraction ─────────────────────────────────────────────────
+
+async def extract_session_insights(transcript: str, top_errors: list) -> dict | None:
     """
-    Suggest a more sophisticated vocabulary alternative for a given phrase.
-    Used to progressively upgrade user vocabulary during training mode.
-    Not in the critical path — called async fire-and-forget.
+    Extract structured learning insights from a session transcript.
+    Called by memory.py after session ends — non-blocking background task.
     """
-    client = get_groq_client()
-    prompt = (
-        f"A {cefr_target}-level English learner said: \"{phrase}\"\n"
-        f"Suggest ONE more sophisticated but natural vocabulary alternative suitable for {cefr_target}+.\n"
-        f"Reply in JSON: {{\"original\": \"...\", \"upgrade\": \"...\", \"example\": \"...\"}}"
-    )
+    prompt = f"""Analyse this English coaching session transcript and extract learning insights about the student.
+
+TRANSCRIPT:
+{transcript[:3000]}
+
+TOP ERRORS THIS SESSION:
+{json.dumps([e.get('error_type', '') for e in top_errors[:5]])}
+
+Return ONLY a JSON object (all keys optional — include only where you have clear evidence):
+{{
+  "mastered": ["..."],
+  "persistent_struggles": ["..."],
+  "preferred_topics": ["..."],
+  "personality_notes": "...",
+  "last_session_summary": "..."
+}}
+
+Be specific: "subject-verb agreement" not "grammar". Max 3 items per list.
+personality_notes: one sentence about how they respond, their pace, confidence.
+last_session_summary: 1-2 sentences on what was worked on and notable progress."""
+
     try:
+        client = get_openai_client()
         response = await client.chat.completions.create(
-            model=CORRECTION_MODEL,
+            model=CORRECTION_MODEL,  # gpt-4o-mini — cheap and sufficient
             messages=[{"role": "user", "content": prompt}],
             stream=False,
-            max_tokens=80,
-            temperature=0.3,
+            max_tokens=300,
+            temperature=0.2,
+            response_format={"type": "json_object"},
+        )
+        return json.loads(response.choices[0].message.content)
+    except Exception:
+        pass
+
+    # Groq fallback
+    try:
+        groq = get_groq_client()
+        response = await groq.chat.completions.create(
+            model=GROQ_FALLBACK_FAST,
+            messages=[{"role": "user", "content": prompt}],
+            stream=False,
+            max_tokens=300,
+            temperature=0.2,
             response_format={"type": "json_object"},
         )
         return json.loads(response.choices[0].message.content)
     except Exception:
         return None
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _preprocess_utterance(text: str) -> str:
+    """Strip leading filler sounds that Whisper sometimes transcribes literally."""
+    text = text.strip()
+    for filler in ["um,", "uh,", "hmm,", "er,"]:
+        if text.lower().startswith(filler):
+            text = text[len(filler):].strip()
+    return text

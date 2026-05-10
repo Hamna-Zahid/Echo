@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   View, Text, ScrollView, StyleSheet,
-  TouchableOpacity, Animated, Platform,
+  TouchableOpacity, Animated,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { T, Fonts, Spacing, Shadow } from '../../constants/tokens';
 import { EchoButton, MicroLabel, SectionHeader } from '../../components/echo/shared';
@@ -32,6 +33,7 @@ const CEFR_SUBTITLE: Record<string, string> = {
 };
 
 export default function DiagnosticResultsScreen() {
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{
     cefr_level?: string; ielts_equivalent?: string;
     fluency?: string; lexical?: string;
@@ -84,7 +86,7 @@ export default function DiagnosticResultsScreen() {
   const focusArea  = result.focus_area;
 
   return (
-    <ScrollView style={s.root} contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
+    <ScrollView style={s.root} contentContainerStyle={[s.content, { paddingTop: insets.top, paddingBottom: insets.bottom + 24 }]} showsVerticalScrollIndicator={false}>
 
       {/* Header */}
       <View style={s.header}>
@@ -216,8 +218,6 @@ const s = StyleSheet.create({
   root:    { flex: 1, backgroundColor: T.bg },
   content: {
     paddingHorizontal: Spacing.screenH,
-    paddingTop: Platform.OS === 'ios' ? 56 : 44,
-    paddingBottom: 48,
   },
 
   header: {

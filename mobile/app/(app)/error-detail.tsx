@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   View, Text, ScrollView, StyleSheet,
-  TouchableOpacity, ActivityIndicator, Platform, Alert,
+  TouchableOpacity, ActivityIndicator, Alert,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { api } from '../../services/api';
 import { T, Fonts, Spacing, Shadow } from '../../constants/tokens';
@@ -58,6 +59,7 @@ const ERROR_TYPE_RULES: Record<string, { title: string; rule: string; example: s
 };
 
 export default function ErrorDetailScreen() {
+  const insets = useSafeAreaInsets();
   const {
     errorId, errorType, originalUtterance, correctedForm,
     explanation, recurrenceCount,
@@ -127,7 +129,7 @@ export default function ErrorDetailScreen() {
   };
 
   return (
-    <ScrollView style={s.root} contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
+    <ScrollView style={s.root} contentContainerStyle={[s.content, { paddingTop: insets.top, paddingBottom: insets.bottom + 24 }]} showsVerticalScrollIndicator={false}>
 
       {/* Header */}
       <View style={s.header}>
@@ -227,8 +229,6 @@ const s = StyleSheet.create({
   root:    { flex: 1, backgroundColor: T.bg },
   content: {
     paddingHorizontal: Spacing.screenH,
-    paddingTop: Platform.OS === 'ios' ? 56 : 44,
-    paddingBottom: 48,
   },
 
   header: {

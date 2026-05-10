@@ -4,6 +4,7 @@ import {
   KeyboardAvoidingView, Platform, ActivityIndicator,
   Alert, ScrollView,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
@@ -21,6 +22,7 @@ async function sendPasswordReset(emailAddr: string): Promise<void> {
 }
 
 export default function LoginScreen() {
+  const insets = useSafeAreaInsets();
   const [email, setEmail]           = useState('');
   const [password, setPassword]     = useState('');
   const [showPass, setShowPass]     = useState(false);
@@ -115,7 +117,7 @@ export default function LoginScreen() {
 
   return (
     <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView contentContainerStyle={s.inner} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={[s.inner, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 24 }]} keyboardShouldPersistTaps="handled">
 
         <View style={s.logoRow}>
           <EchoLogo size={30} />
@@ -180,7 +182,7 @@ export default function LoginScreen() {
 
 const s = StyleSheet.create({
   root:  { flex: 1, backgroundColor: T.bg },
-  inner: { paddingHorizontal: Spacing.screenH, paddingTop: 64, paddingBottom: 48 },
+  inner: { paddingHorizontal: Spacing.screenH },
 
   logoRow:    { marginBottom: 32 },
   title:      { fontFamily: Fonts.bold, fontSize: 28, color: T.charcoal, letterSpacing: -0.6, marginBottom: 6 },

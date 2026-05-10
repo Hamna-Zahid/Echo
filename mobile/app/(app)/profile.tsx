@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, TouchableOpacity,
   ScrollView, Platform, Alert, Linking,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { supabase } from '../../services/supabase';
 import { api } from '../../services/api';
@@ -21,6 +22,7 @@ type RowItem = {
 };
 
 export default function ProfileScreen() {
+  const insets = useSafeAreaInsets();
   const [user, setUser]       = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
 
@@ -171,7 +173,7 @@ export default function ProfileScreen() {
   ];
 
   return (
-    <ScrollView style={s.root} contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
+    <ScrollView style={s.root} contentContainerStyle={[s.content, { paddingTop: insets.top, paddingBottom: insets.bottom + 24 }]} showsVerticalScrollIndicator={false}>
 
       {/* Header */}
       <View style={s.header}>
@@ -240,7 +242,7 @@ export default function ProfileScreen() {
 
 const s = StyleSheet.create({
   root:    { flex: 1, backgroundColor: T.bgSubtle },
-  content: { paddingHorizontal: Spacing.screenH, paddingTop: Platform.OS === 'ios' ? 56 : 44, paddingBottom: 48 },
+  content: { paddingHorizontal: Spacing.screenH },
 
   header:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 0, backgroundColor: T.bg, marginHorizontal: -Spacing.screenH, paddingHorizontal: Spacing.screenH, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: T.border },
   backBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: T.bgSubtle, borderWidth: 1, borderColor: T.border, alignItems: 'center', justifyContent: 'center' },

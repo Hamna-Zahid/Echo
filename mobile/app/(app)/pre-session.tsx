@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform,
+  View, Text, StyleSheet, TouchableOpacity, ScrollView,
   ActivityIndicator,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { T, Fonts, Spacing, MODES, ERROR_TYPES } from '../../constants/tokens';
 import { EchoButton, MicroLabel, AccentChip } from '../../components/echo/shared';
@@ -42,6 +43,7 @@ const ERROR_TYPE_LABELS: Record<string, string> = {
 };
 
 export default function PreSessionScreen() {
+  const insets = useSafeAreaInsets();
   const { modeId, mode } = useLocalSearchParams<{ modeId: string; mode: string }>();
   const modeData = MODES.find(m => m.id === modeId) || MODES[1];
   const [accent, setAccent] = useState<'American' | 'British'>('American');
@@ -85,7 +87,7 @@ export default function PreSessionScreen() {
   return (
     <View style={s.root}>
       {/* Top */}
-      <View style={s.topBar}>
+      <View style={[s.topBar, { paddingTop: insets.top + 12 }]}>
         <TouchableOpacity onPress={() => router.back()} style={s.closeBtn}>
           <IconClose color={T.charcoal} size={13} />
         </TouchableOpacity>
@@ -145,7 +147,7 @@ export default function PreSessionScreen() {
         ) : null}
       </ScrollView>
 
-      <View style={s.footer}>
+      <View style={[s.footer, { paddingBottom: insets.bottom + 10 }]}>
         <EchoButton label="Begin Session" onPress={startSession} />
       </View>
     </View>
@@ -154,7 +156,7 @@ export default function PreSessionScreen() {
 
 const s = StyleSheet.create({
   root:    { flex: 1, backgroundColor: T.bg },
-  topBar:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.screenH, paddingTop: Platform.OS === 'ios' ? 60 : 44, paddingBottom: 12 },
+  topBar:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.screenH, paddingBottom: 12 },
   closeBtn:  { width: 36, height: 36, borderRadius: 10, backgroundColor: T.bgSubtle, borderWidth: 1, borderColor: T.border, alignItems: 'center', justifyContent: 'center' },
   modePill:  { flexDirection: 'row', alignItems: 'center', gap: 7, height: 28, paddingHorizontal: 14, borderRadius: 999 },
   modePillText: { fontFamily: Fonts.bold, fontSize: 11, letterSpacing: 0.4, textTransform: 'uppercase' },
@@ -177,5 +179,5 @@ const s = StyleSheet.create({
   targetTypePill: { height: 20, paddingHorizontal: 7, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
   targetTypeText: { fontFamily: Fonts.bold, fontSize: 9, letterSpacing: 0.5, textTransform: 'uppercase' },
 
-  footer: { paddingHorizontal: Spacing.screenH, paddingBottom: Platform.OS === 'ios' ? 36 : 24, paddingTop: 10, borderTopWidth: 1, borderTopColor: T.border, backgroundColor: T.bg },
+  footer: { paddingHorizontal: Spacing.screenH, paddingTop: 10, borderTopWidth: 1, borderTopColor: T.border, backgroundColor: T.bg },
 });

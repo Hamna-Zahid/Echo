@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  ScrollView, Platform,
+  ScrollView,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { api } from '../../services/api';
 import { T, Fonts, Spacing, Shadow } from '../../constants/tokens';
@@ -25,6 +26,7 @@ const GOALS = [
 ];
 
 export default function PostRegScreen() {
+  const insets = useSafeAreaInsets();
   const [level, setLevel] = useState<string | null>(null);
   const [goal, setGoal]   = useState<string | null>(null);
 
@@ -49,7 +51,7 @@ export default function PostRegScreen() {
   return (
     <ScrollView
       style={s.root}
-      contentContainerStyle={s.content}
+      contentContainerStyle={[s.content, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 24 }]}
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
     >
@@ -131,8 +133,6 @@ const s = StyleSheet.create({
   root:    { flex: 1, backgroundColor: T.bg },
   content: {
     paddingHorizontal: Spacing.screenH,
-    paddingTop: Platform.OS === 'ios' ? 56 : 44,
-    paddingBottom: 48,
   },
 
   logoRow:    { marginBottom: 6 },

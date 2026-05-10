@@ -223,13 +223,13 @@ async def _cartesia_tts(
 
     headers = {
         "X-API-Key": api_key,
-        "Cartesia-Version": "2024-06-10",
+        "Cartesia-Version": "2025-04-16",
         "Content-Type": "application/json",
         "Accept": "text/event-stream",
     }
 
     payload = {
-        "model_id": "sonic-english",
+        "model_id": "sonic-2",
         "transcript": text,
         "voice": {"mode": "id", "id": voice_id},
         "output_format": {
@@ -241,29 +241,40 @@ async def _cartesia_tts(
     }
 
     try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(10.0, connect=3.0)) as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(15.0, connect=5.0)) as client:
             async with client.stream(
                 "POST", CARTESIA_STREAMING_URL, headers=headers, json=payload
             ) as response:
                 if response.status_code != 200:
-                    # Cartesia unavailable — fall through to edge-tts
+                    body = await response.aread()
+                    import warnings
+                    warnings.warn(f"Cartesia HTTP {response.status_code}: {body[:200]}")
                     async for chunk in _edge_tts(text, accent, sample_rate):
                         yield chunk
                     return
 
                 async for line in response.aiter_lines():
+                    line = line.strip()
+                    if not line:
+                        continue
                     if line.startswith("data: "):
-                        data_str = line[6:]
-                        if data_str == "[DONE]":
+                        data_str = line[6:].strip()
+                        if data_str in ("[DONE]", ""):
                             break
                         try:
                             event = json.loads(data_str)
-                            if "data" in event:
-                                yield base64.b64decode(event["data"])
+                            # Cartesia sends {"type":"chunk","data":"<b64>",...}
+                            # or {"done":true} at end
+                            if event.get("done"):
+                                break
+                            audio_b64 = event.get("data")
+                            if audio_b64:
+                                yield base64.b64decode(audio_b64)
                         except Exception:
                             continue
 
-    except Exception:
-        # Any failure — fall back to edge-tts silently
+    except Exception as e:
+        import warnings
+        warnings.warn(f"Cartesia TTS error: {e} — falling back to edge-tts")
         async for chunk in _edge_tts(text, accent, sample_rate):
             yield chunk

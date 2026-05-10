@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   View, Text, ScrollView, StyleSheet,
-  TouchableOpacity, ActivityIndicator, Animated, Platform,
+  TouchableOpacity, ActivityIndicator, Animated,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { api } from '../../services/api';
 import { T, Fonts, Spacing, Shadow } from '../../constants/tokens';
@@ -28,6 +29,7 @@ function fmtDuration(s: number) {
 }
 
 export default function SessionEndScreen() {
+  const insets = useSafeAreaInsets();
   const { sessionId, mode, elapsed } = useLocalSearchParams<{
     sessionId?: string; mode?: string; elapsed?: string;
   }>();
@@ -94,7 +96,7 @@ export default function SessionEndScreen() {
   }
 
   return (
-    <ScrollView style={s.root} contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
+    <ScrollView style={s.root} contentContainerStyle={[s.content, { paddingTop: insets.top + 14, paddingBottom: insets.bottom + 24 }]} showsVerticalScrollIndicator={false}>
       {/* Drag handle */}
       <View style={s.handle} />
 
@@ -190,8 +192,6 @@ const s = StyleSheet.create({
   root:    { flex: 1, backgroundColor: T.bg },
   content: {
     paddingHorizontal: Spacing.screenH,
-    paddingTop: 14,
-    paddingBottom: 48,
   },
 
   handle: {

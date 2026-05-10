@@ -15,9 +15,13 @@ from services.stt import transcribe_audio, transcribe_audio_full
 from services.llm import stream_conversation, stream_diagnostic_score, stream_correction_check
 from services.tts import stream_tts
 from services.pronunciation import score_pronunciation
+from services.memory import load_user_memory, build_memory_context, update_user_memory
 from prompts.diagnostic import DIAGNOSTIC_SYSTEM, DIAGNOSTIC_CONVERSATION_SYSTEM
 from prompts.training import build_training_prompt
 from prompts.interview import build_interview_prompt
+from prompts.conversation import build_conversation_prompt
+from prompts.professional import build_professional_prompt
+from prompts.accent import build_accent_prompt
 from models.session import SessionState
 
 router = APIRouter()
@@ -102,18 +106,35 @@ async def handle_stream_b(
     cefr = state.get("cefr_level") or user_data.get("cefr_level") or "B1"
     accent = user_data.get("preferred_accent", "american")
 
+    # Build memory context to prepend to every prompt
+    user_memory = state.get("user_memory", {})
+    user_name = (user_data.get("full_name") or "").strip().split()[0] if user_data.get("full_name") else ""
+    memory_ctx = build_memory_context(user_memory, user_name)
+
     if mode == "diagnostic":
-        system_prompt = DIAGNOSTIC_CONVERSATION_SYSTEM
+        system_prompt = memory_ctx + DIAGNOSTIC_CONVERSATION_SYSTEM
     elif mode == "interview":
-        system_prompt = build_interview_prompt()
-    else:  # training (default)
+        system_prompt = memory_ctx + build_interview_prompt()
+    elif mode == "conversation":
+        system_prompt = memory_ctx + build_conversation_prompt(cefr, accent)
+    elif mode == "professional":
+        system_prompt = memory_ctx + build_professional_prompt(cefr, accent)
+    elif mode == "accent":
+        exam_target = (user_data.get("exam_target") or "general").lower()
+        accent_context_map = {
+            "ielts": "ielts", "toefl": "toefl",
+            "job interview": "interview", "interview": "interview",
+        }
+        ctx = accent_context_map.get(exam_target, "daily")
+        system_prompt = memory_ctx + build_accent_prompt(accent, cefr, context=ctx)
+    else:  # training (default for "training" and any unknown mode)
         top_errors = state.get("top_recurring_errors", [])
         topic = state.get("current_topic", "general")
-        system_prompt = build_training_prompt(cefr, top_errors, topic, accent)
+        system_prompt = memory_ctx + build_training_prompt(cefr, top_errors, topic, accent)
 
     # Sentence boundary characters — flush to TTS when hit
     SENTENCE_ENDS = {'.', '!', '?'}
-    MIN_SENTENCE_LEN = 18  # avoid firing TTS on "I." or "OK."
+    MIN_SENTENCE_LEN = 30  # avoid firing TTS on fragments like "Right." or "I see."
 
     sentence_buf = ""
     full_response = ""
@@ -290,17 +311,19 @@ async def websocket_session(
     mode: str = Query("training"),
     accent: Optional[str] = Query(None),
 ):
-    # Step 1: Validate JWT
+    # Must accept before closing — closing an unaccepted WS returns 403 to client.
+    await websocket.accept()
+
     if not token:
+        await send_json(websocket, {"type": "error", "message": "Missing token"})
         await websocket.close(code=4001, reason="Missing token")
         return
 
     user = verify_token(token)
     if not user:
+        await send_json(websocket, {"type": "error", "message": "Invalid or expired token"})
         await websocket.close(code=4001, reason="Invalid token")
         return
-
-    await websocket.accept()
     supabase = get_supabase()
     user_id = user["id"]
 
@@ -333,13 +356,16 @@ async def websocket_session(
     user_res = supabase.table("users").select("*").eq("id", user_id).single().execute()
     user_data = user_res.data or {}
 
-    # Step 5: Initialize Redis session state
+    # Step 5: Load user memory (persistent learning context across sessions)
+    user_memory = load_user_memory(user_id)
+
+    # Step 6: Initialize Redis session state
     state = {
         "user_id": user_id,
         "mode": mode,
         "is_diagnostic_complete": False,
         "diagnostic_turn_count": 0,
-        "current_topic": "career",
+        "current_topic": user_memory.get("preferred_topics", ["career"])[0] if user_memory.get("preferred_topics") else "career",
         "silence_timer_start": None,
         "error_count_this_session": 0,
         "cefr_level": user_data.get("cefr_level"),
@@ -349,10 +375,12 @@ async def websocket_session(
         "preferred_accent": accent or user_data.get("preferred_accent", "american"),
         "conversation_history": [],
         "session_transcript": "",
+        "session_started_at": time.time(),
+        "user_memory": user_memory,
     }
     await set_session_state(session_id, state)
 
-    # Step 6: Send session_ready + trigger AI greeting
+    # Step 7: Send session_ready + trigger AI greeting
     await send_json(websocket, {
         "type": "session_ready",
         "cefr": user_data.get("cefr_level"),
@@ -363,10 +391,23 @@ async def websocket_session(
     # Start silence nudge background task
     nudge_task = asyncio.create_task(run_silence_nudge(websocket, session_id))
 
-    # Generate AI greeting
-    greeting_text = "Hello! I'm your EchoCoach. Let's begin. Can you tell me a little about yourself and what you're hoping to achieve?"
-    if mode == "diagnostic":
-        greeting_text = "Welcome. I'm going to ask you a few questions to understand your current English level. Let's start — can you tell me about your work or studies?"
+    # Build personalised greeting using the user's name if available
+    first_name = ""
+    full_name = user_data.get("full_name", "")
+    if full_name:
+        first_name = full_name.strip().split()[0]
+
+    name_part = f", {first_name}" if first_name else ""
+
+    greetings = {
+        "diagnostic":   f"Welcome{name_part}. I'll ask you five questions to assess your current English level — just speak naturally, there are no right or wrong answers. Let's start: can you tell me about your work or studies?",
+        "training":     f"Hey{name_part}! Good to have you. Let's get straight into it — tell me, what's been keeping you busy lately?",
+        "interview":    f"Thanks for coming in{name_part}. Let's jump straight to it — walk me through your background. Who are you and what do you do?",
+        "conversation": f"Hey{name_part}! Great to chat. So — what's going on with you lately? Anything interesting happen this week?",
+        "professional": f"Right{name_part}, let's get started. Give me a quick summary of what you're currently working on.",
+        "accent":       f"Welcome{name_part}. We're going to work on your pronunciation through shadowing. I'll say a phrase, you repeat it back. Ready? Let's start simple: \"I need to think about it.\" Your turn — repeat that.",
+    }
+    greeting_text = greetings.get(mode, greetings["training"])
 
     state["tts_is_speaking"] = True
     state["conversation_history"].append({"role": "assistant", "content": greeting_text})
@@ -407,7 +448,7 @@ async def websocket_session(
                 try:
                     current_mode = (await get_session_state(session_id) or {}).get("mode", mode)
                     if current_mode == "diagnostic":
-                        stt_result = await transcribe_audio_full(audio_bytes, include_pronunciation_hints=True)
+                        stt_result = await transcribe_audio_full(audio_bytes, language="en", include_pronunciation_hints=True)
                         transcript = stt_result.text
                     else:
                         transcript = await transcribe_audio(audio_bytes)
@@ -425,8 +466,9 @@ async def websocket_session(
 
                 # Update conversation history + transcript (cap at 20 turns to avoid Redis overflow)
                 state["conversation_history"].append({"role": "user", "content": transcript})
-                if len(state["conversation_history"]) > 20:
-                    state["conversation_history"] = state["conversation_history"][-20:]
+                if len(state["conversation_history"]) > 60:
+                    # Keep most recent 60 turns (30 exchanges) — older context pruned to stay within Redis limits
+                    state["conversation_history"] = state["conversation_history"][-60:]
                 state["session_transcript"] += f"\nUser: {transcript}"
                 new_turn_count = state.get("diagnostic_turn_count", 0) + 1
                 state["diagnostic_turn_count"] = new_turn_count
@@ -465,6 +507,17 @@ async def websocket_session(
 
                     if state.get("is_diagnostic_complete"):
                         await send_json(websocket, {"type": "session_summary", "session_id": session_db_id})
+
+                    # Update persistent user memory in the background (non-blocking)
+                    session_minutes = int((time.time() - state.get("session_started_at", time.time())) / 60)
+                    asyncio.create_task(update_user_memory(
+                        user_id=user_id,
+                        existing_memory=state.get("user_memory", {}),
+                        session_transcript=state.get("session_transcript", ""),
+                        session_mode=mode,
+                        session_minutes=max(1, session_minutes),
+                        top_errors=state.get("top_recurring_errors", []),
+                    ))
 
                     await delete_session_state(session_id)
 
