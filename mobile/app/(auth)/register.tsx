@@ -19,18 +19,23 @@ import {
 // Required by expo-web-browser to complete OAuth redirect back into the app
 WebBrowser.maybeCompleteAuthSession();
 
-const EXAM_OPTIONS = ['IELTS', 'TOEFL', 'Job Interview', 'General English'] as const;
+const GOAL_OPTIONS = [
+  'Daily Conversation',
+  'Job Interview',
+  'Work English',
+  'Confidence',
+] as const;
 
 export default function RegisterScreen() {
   const insets = useSafeAreaInsets();
-  const [name, setName]             = useState('');
-  const [email, setEmail]           = useState('');
-  const [password, setPassword]     = useState('');
-  const [showPass, setShowPass]     = useState(false);
-  const [goal, setGoal]             = useState('IELTS');
-  const [accent, setAccent]         = useState<'American' | 'British'>('American');
-  const [loading, setLoading]       = useState(false);
-  const [googleLoading, setGoogle]  = useState(false);
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPass, setShowPass] = useState(false);
+  const [goal, setGoal] = useState<typeof GOAL_OPTIONS[number]>('Daily Conversation');
+  const [accent, setAccent] = useState<'American' | 'British'>('American');
+  const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogle] = useState(false);
 
   // ── Email + password registration ───────────────────────────
   const handleRegister = async () => {
@@ -153,9 +158,9 @@ export default function RegisterScreen() {
         </View>
 
         {/* Goal chips */}
-        <MicroLabel style={{ marginBottom: 10 }}>Your Goal</MicroLabel>
+        <MicroLabel style={{ marginBottom: 10 }}> What do you want to improve?</MicroLabel>
         <View style={s.chipRow}>
-          {EXAM_OPTIONS.map((g) => (
+          {GOAL_OPTIONS.map((g) => (
             <EchoChip key={g} label={g} active={goal === g} onPress={() => setGoal(g)} />
           ))}
         </View>
@@ -188,7 +193,7 @@ export default function RegisterScreen() {
                   },
                 ]}
               >
-                {a === 'American' ? '🇺🇸 American' : '🇬🇧 British'}
+                {a}
               </Text>
             </TouchableOpacity>
           ))}
@@ -214,18 +219,18 @@ export default function RegisterScreen() {
 }
 
 const s = StyleSheet.create({
-  root:  { flex: 1, backgroundColor: T.bg },
+  root: { flex: 1, backgroundColor: T.bg },
   inner: { paddingHorizontal: Spacing.screenH },
 
   logoRow: { marginBottom: 28 },
   title: { fontFamily: Fonts.bold, fontSize: 28, color: T.charcoal, letterSpacing: -0.6, marginBottom: 6 },
-  sub: { fontFamily: Fonts.regular, fontSize: 15, color: T.muted, marginBottom: 24 },
+  sub: { fontFamily: Fonts.regular, fontSize: 15, color: T.slate, marginBottom: 24 },
 
   eyeText: { fontFamily: Fonts.semibold, fontSize: 12, color: T.rose400 },
 
   dividerRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 },
   dividerLine: { flex: 1, height: 1, backgroundColor: T.border },
-  dividerText: { fontFamily: Fonts.regular, fontSize: 12, color: T.muted, letterSpacing: 0.2 },
+  dividerText: { fontFamily: Fonts.regular, fontSize: 12, color: T.slate, letterSpacing: 0.2 },
 
   chipRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginBottom: 24 },
 
@@ -250,6 +255,6 @@ const s = StyleSheet.create({
   },
 
   bottomRow: { flexDirection: 'row', justifyContent: 'center' },
-  bottomText: { fontFamily: Fonts.regular, fontSize: 14, color: T.muted },
+  bottomText: { fontFamily: Fonts.regular, fontSize: 14, color: T.slate },
   bottomLink: { fontFamily: Fonts.semibold, fontSize: 14, color: T.rose600 },
 });

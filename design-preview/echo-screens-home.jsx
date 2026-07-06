@@ -39,7 +39,7 @@ function HomeScreen({ onNavigate }) {
       <div style={{ padding: '18px 22px', display: 'flex', flexDirection: 'column', gap: 24 }}>
         {/* Level card */}
         <div style={{
-          background: `linear-gradient(138deg, #D81B60 0%, ${T.rose600} 48%, #C2185B 100%)`,
+          background: `linear-gradient(138deg,     0%, ${T.rose600} 48%, #C2185B 100%)`,
           borderRadius: 22, padding: '20px 22px', position: 'relative', overflow: 'hidden',
           boxShadow: '0 8px 28px rgba(225,29,116,0.25), 0 2px 8px rgba(0,0,0,0.06)',
           opacity: vis ? 1 : 0, transform: vis ? 'none' : 'translateY(22px)',
