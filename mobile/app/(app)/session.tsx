@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity,
+  View, Text, StyleSheet, TouchableOpacity, Image
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
@@ -9,20 +9,72 @@ import { setAudioModeAsync, createAudioPlayer } from 'expo-audio';
 
 import { T, Fonts, Spacing } from '../../constants/tokens';
 import { Waveform, StatusPill, CorrectionCard, type SessionState } from '../../components/echo/shared';
+import { PhoneIcon, PauseIcon, MuteIcon, } from '../../components/echo/icons';
 import { useWebSocket } from '../../hooks/useWebSocket';
-import { useVAD }        from '../../hooks/useVAD';
-import { useSession }    from '../../hooks/useSession';
+import { useVAD } from '../../hooks/useVAD';
+import { useSession } from '../../hooks/useSession';
 
 export default function SessionScreen() {
   const { sessionId, mode, accent } = useLocalSearchParams<{ sessionId: string; mode: string; accent?: string }>();
-  const [uiState, setUiState]       = useState<SessionState>('connecting');
-  const [isActive, setIsActive]     = useState(false);
-  const isActiveRef                 = useRef(false);   // ref mirror of isActive for stable callbacks
-  const [elapsed, setElapsed]       = useState(0);
-  const isSpeakingRef   = useRef(false);
-  const sessionDbIdRef  = useRef<string | null>(null);
+  const [uiState, setuiState] = useState<SessionState>('connecting');
+  const [isActive, setIsActive] = useState(false);
+  const isActiveRef = useRef(false);   // ref mirror of isActive for stable callbacks
+  const [elapsed, setElapsed] = useState(0);
+  const isSpeakingRef = useRef(false);
+  const sessionDbIdRef = useRef<string | null>(null);
 
   const { correctionCards, dismissCard, pushCard, setSessionReady } = useSession();
+
+
+  // ======================================================
+  // DEV MODE (REMOVE BEFORE PRODUCTION)
+  // ======================================================
+
+  const DEV_MODE = true;
+
+  // Available:
+  // 'connecting'
+  // 'idle'
+  // 'listening'
+  // 'processing'
+  // 'speaking'
+  const DEV_STATE: SessionState = 'listening';
+
+  const currentState: SessionState =
+    __DEV__ && DEV_MODE ? DEV_STATE : uiState;
+
+  const SESSION_STATUS = {
+    connecting: {
+      icon: '🟣',
+      title: 'Connecting...',
+      subtitle: 'Preparing your session.',
+    },
+
+    idle: {
+      icon: '✨',
+      title: 'Ready to talk',
+      subtitle: "I'm here whenever you are.",
+    },
+
+    listening: {
+      icon: '🎤',
+      title: "I'm listening...",
+      subtitle: 'Speak naturally.',
+    },
+
+    processing: {
+      icon: '🧠',
+      title: 'Thinking...',
+      subtitle: 'Just a moment.',
+    },
+
+    speaking: {
+      icon: '💬',
+      title: 'Speaking...',
+      subtitle: "Here's what I think.",
+    },
+  } as const;
+
 
   // ── Timer ────────────────────────────────────────────────────
   useEffect(() => {
@@ -38,9 +90,9 @@ export default function SessionScreen() {
   // All PCM F32LE chunks for the current AI turn accumulate here.
   // On tts_done we concatenate them into a single WAV and play once —
   // this eliminates the per-chunk gap/overhead of playing many tiny files.
-  const pcmAccumRef    = useRef<Uint8Array[]>([]);
+  const pcmAccumRef = useRef<Uint8Array[]>([]);
   const audioPlayerRef = useRef<ReturnType<typeof createAudioPlayer> | null>(null);
-  const lastTempPath   = useRef<string | null>(null);
+  const lastTempPath = useRef<string | null>(null);
 
   const playAccumulated = useCallback(async () => {
     if (pcmAccumRef.current.length === 0) return;
@@ -62,12 +114,12 @@ export default function SessionScreen() {
 
       // Release any previous player
       if (audioPlayerRef.current) {
-        try { audioPlayerRef.current.remove(); } catch (_) {}
+        try { audioPlayerRef.current.remove(); } catch (_) { }
         audioPlayerRef.current = null;
       }
       // Clean up previous temp file
       if (lastTempPath.current) {
-        FileSystem.deleteAsync(lastTempPath.current, { idempotent: true }).catch(() => {});
+        FileSystem.deleteAsync(lastTempPath.current, { idempotent: true }).catch(() => { });
       }
       lastTempPath.current = tempPath;
 
@@ -80,31 +132,31 @@ export default function SessionScreen() {
       await new Promise(res => setTimeout(res, durationMs));
     } catch (e) {
       console.warn('[Audio] playback error:', e);
-      if (tempPath) FileSystem.deleteAsync(tempPath, { idempotent: true }).catch(() => {});
+      if (tempPath) FileSystem.deleteAsync(tempPath, { idempotent: true }).catch(() => { });
     }
 
     isSpeakingRef.current = false;
-    setUiState('listening');
+    setuiState('listening');
   }, []);
 
   const clearAudio = useCallback(() => {
-    pcmAccumRef.current  = [];
+    pcmAccumRef.current = [];
     isSpeakingRef.current = false;
     if (audioPlayerRef.current) {
-      try { audioPlayerRef.current.remove(); } catch (_) {}
+      try { audioPlayerRef.current.remove(); } catch (_) { }
       audioPlayerRef.current = null;
     }
     if (lastTempPath.current) {
-      FileSystem.deleteAsync(lastTempPath.current, { idempotent: true }).catch(() => {});
+      FileSystem.deleteAsync(lastTempPath.current, { idempotent: true }).catch(() => { });
       lastTempPath.current = null;
     }
-    setUiState('listening');
+    setuiState('listening');
   }, []);
 
   // ── WebSocket ────────────────────────────────────────────────
   const { sendMessage, connected } = useWebSocket({
     sessionId: sessionId!,
-    mode:   mode   || 'training',
+    mode: mode || 'training',
     accent: accent || undefined,
     onMessage: useCallback(async (msg: any) => {
       try {
@@ -113,14 +165,14 @@ export default function SessionScreen() {
             setSessionReady(true);
             setIsActive(true);
             isActiveRef.current = true;
-            setUiState('idle');
+            setuiState('idle');
             if (msg.session_id) sessionDbIdRef.current = msg.session_id;
             break;
           case 'tts_chunk':
             pcmAccumRef.current.push(base64ToBytes(msg.data));
             if (!isSpeakingRef.current) {
               isSpeakingRef.current = true;
-              setUiState('speaking');
+              setuiState('speaking');
             }
             break;
           case 'tts_done':
@@ -138,16 +190,16 @@ export default function SessionScreen() {
             router.push({
               pathname: '/(app)/diagnostic-results',
               params: {
-                cefr_level:       r.cefr_level,
+                cefr_level: r.cefr_level,
                 ielts_equivalent: r.ielts_equivalent != null ? String(r.ielts_equivalent) : undefined,
-                fluency:          r.fluency          != null ? String(r.fluency)          : undefined,
-                lexical:          r.lexical           != null ? String(r.lexical)          : undefined,
-                grammar:          r.grammar           != null ? String(r.grammar)          : undefined,
-                pronunciation:    r.pronunciation     != null ? String(r.pronunciation)    : undefined,
-                strengths:        r.strengths  ? JSON.stringify(r.strengths)  : undefined,
-                weaknesses:       r.weaknesses ? JSON.stringify(r.weaknesses) : undefined,
-                learning_plan:    r.learning_plan,
-                focus_area:       r.focus_area,
+                fluency: r.fluency != null ? String(r.fluency) : undefined,
+                lexical: r.lexical != null ? String(r.lexical) : undefined,
+                grammar: r.grammar != null ? String(r.grammar) : undefined,
+                pronunciation: r.pronunciation != null ? String(r.pronunciation) : undefined,
+                strengths: r.strengths ? JSON.stringify(r.strengths) : undefined,
+                weaknesses: r.weaknesses ? JSON.stringify(r.weaknesses) : undefined,
+                learning_plan: r.learning_plan,
+                focus_area: r.focus_area,
               },
             });
             break;
@@ -176,12 +228,12 @@ export default function SessionScreen() {
         sendMessage({ type: 'interrupt' });
         clearAudio();
       }
-      setUiState('listening');
+      setuiState('listening');
     }, [sendMessage, clearAudio]),
 
     onSpeechEnd: useCallback(async (audioData: Uint8Array) => {
       if (!isActiveRef.current) return;
-      setUiState('processing');
+      setuiState('processing');
       try {
         for (const chunk of [...audioChunksRef.current, audioData]) {
           sendMessage({ type: 'audio_chunk', data: bytesToBase64(chunk) });
@@ -190,7 +242,7 @@ export default function SessionScreen() {
         sendMessage({ type: 'turn_end' });
       } catch (error) {
         console.warn('[Session] Error sending audio chunks:', error);
-        setUiState('listening');
+        setuiState('listening');
       }
     }, [sendMessage]),
 
@@ -205,14 +257,14 @@ export default function SessionScreen() {
     setAudioModeAsync({
       allowsRecording: true,
       playsInSilentMode: true,
-    }).catch(() => {});
+    }).catch(() => { });
     startVAD();
-    
+
     return () => {
       stopVAD();
       sendMessage({ type: 'session_end' });
       if (audioPlayerRef.current) {
-        try { audioPlayerRef.current.remove(); } catch (_) {}
+        try { audioPlayerRef.current.remove(); } catch (_) { }
         audioPlayerRef.current = null;
       }
     };
@@ -227,8 +279,8 @@ export default function SessionScreen() {
       pathname: '/(app)/session-end',
       params: {
         sessionId: dbId ?? undefined,
-        mode:      mode  ?? 'training',
-        elapsed:   String(elapsed),
+        mode: mode ?? 'training',
+        elapsed: String(elapsed),
       },
     });
   };
@@ -246,7 +298,7 @@ export default function SessionScreen() {
         </TouchableOpacity>
 
         <View style={s.modeTag}>
-          <Text style={s.modeTagText}>{modeLabel.toUpperCase()}</Text>
+          <Text style={s.modeTagText}>LIVE SESSION</Text>
         </View>
 
         <View style={s.timerRow}>
@@ -255,21 +307,37 @@ export default function SessionScreen() {
         </View>
       </View>
 
+
+
       {/* ── Main stage ── */}
       <View style={s.stage}>
+        <Image
+          source={require('../../assets/RoseOrb.gif')}
+          style={s.orb}
+          resizeMode="contain"
+        />
         {/* Ambient glow when speaking */}
-        {uiState === 'speaking' && (
-          <View style={[s.ambientGlow, { pointerEvents: 'none' }]} />
+        {currentState === 'speaking' && (
+          <View style={[{ pointerEvents: 'none' }]} />
         )}
         {/* Active recording border indicator */}
-        {uiState === 'listening' && (
+        {currentState === 'listening' && (
           <View style={[s.listeningBorder, { pointerEvents: 'none' }]} />
         )}
 
-        <Waveform state={uiState} />
-        <StatusPill state={uiState} />
+        <Waveform state={currentState} />
+        <View style={s.statusContainer}>
+          <Text style={s.statusTitle}>
+            {SESSION_STATUS[currentState].title}
+          </Text>
 
-        {uiState === 'speaking' && (
+          <Text style={s.statusSubtitle}>
+            {SESSION_STATUS[currentState].subtitle}
+          </Text>
+
+        </View>
+
+        {currentState === 'speaking' && (
           <Text style={s.interruptHint}>Tap to interrupt</Text>
         )}
       </View>
@@ -287,12 +355,12 @@ export default function SessionScreen() {
           <CorrectionCard
             key={card.id}
             correction={{
-              id:          card.id,
-              type:        card.error_type,
-              original:    card.original_utterance,
-              corrected:   card.corrected_form,
+              id: card.id,
+              type: card.error_type,
+              original: card.original_utterance,
+              corrected: card.corrected_form,
               explanation: card.explanation,
-              full:        card.full_sentence,
+              full: card.full_sentence,
             }}
             onDismiss={() => dismissCard(card.id)}
           />
@@ -393,4 +461,53 @@ const s = StyleSheet.create({
   reconnectText: { fontFamily: Fonts.semibold, fontSize: 13, color: '#fff' },
 
   cardsArea: { position: 'absolute', bottom: 0, left: 0, right: 0 },
+
+  statusContainer: {
+    alignItems: 'center',
+    marginTop: 10,
+  },
+
+  statusTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  statusIcon: {
+    fontSize: 20,
+    marginRight: 8,
+  },
+
+  statusTitle: {
+    fontFamily: Fonts.bold,
+    fontSize: 18,
+    color: T.rose600,
+    textAlign: 'center',
+  },
+
+  statusSubtitle: {
+    marginTop: 6,
+    marginBottom: 14,
+    fontFamily: Fonts.regular,
+    fontSize: 15,
+    color: T.slate,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+
+  orb: {
+    width: 110,
+    height: 110,
+  },
+
+  endButton: {
+    backgroundColor: '#EF4444',
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+
+
+  },
+
 });

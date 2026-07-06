@@ -27,7 +27,7 @@ export default function LoginScreen() {
   const [password, setPassword]     = useState('');
   const [showPass, setShowPass]     = useState(false);
   const [loading, setLoading]       = useState(false);
-  const [googleLoading, setGoogle]  = useState(false);
+  const [googleLoading, setGoogleLoading]  = useState(false);
 
   // ── Forgot password ─────────────────────────────────────────
   const handleForgotPassword = () => {
@@ -74,17 +74,20 @@ export default function LoginScreen() {
       const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
       if (error) throw error;
       router.replace('/(app)');
-    } catch (e: any) {
-      Alert.alert('Sign in failed', e.message);
-    } finally {
-      setLoading(false);
-    }
+    } catch (error) {
+      const message =
+          error instanceof Error
+              ? error.message
+              : 'Something went wrong.';
+  
+      Alert.alert('Sign in failed', message);
+  }
   };
 
   // ── Google OAuth ─────────────────────────────────────────────
   const handleGoogleSignIn = async () => {
     try {
-      setGoogle(true);
+      setGoogleLoading(true);
       // Build the redirect URL for this device (Expo Go vs production build)
       const redirectTo = Linking.createURL('/');
 
@@ -111,7 +114,7 @@ export default function LoginScreen() {
     } catch (e: any) {
       Alert.alert('Google sign-in failed', e.message || 'Please try again.');
     } finally {
-      setGoogle(false);
+      setGoogleLoading(false);
     }
   };
 
@@ -186,7 +189,7 @@ const s = StyleSheet.create({
 
   logoRow:    { marginBottom: 32 },
   title:      { fontFamily: Fonts.bold, fontSize: 28, color: T.charcoal, letterSpacing: -0.6, marginBottom: 6 },
-  sub:        { fontFamily: Fonts.regular, fontSize: 15, color: T.muted, marginBottom: 28 },
+  sub:        { fontFamily: Fonts.regular, fontSize: 15, color: T.slate, marginBottom: 28 },
 
   eyeText:    { fontFamily: Fonts.semibold, fontSize: 12, color: T.rose400 },
   forgotRow:  { alignSelf: 'flex-end', marginBottom: 22 },
@@ -200,9 +203,9 @@ const s = StyleSheet.create({
 
   dividerRow:  { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 },
   dividerLine: { flex: 1, height: 1, backgroundColor: T.border },
-  dividerText: { fontFamily: Fonts.regular, fontSize: 12, color: T.muted, letterSpacing: 0.2 },
+  dividerText: { fontFamily: Fonts.regular, fontSize: 12, color: T.slate, letterSpacing: 0.2 },
 
   bottomRow:  { flexDirection: 'row', justifyContent: 'center' },
-  bottomText: { fontFamily: Fonts.regular, fontSize: 14, color: T.muted },
+  bottomText: { fontFamily: Fonts.regular, fontSize: 14, color: T.slate },
   bottomLink: { fontFamily: Fonts.semibold, fontSize: 14, color: T.rose600 },
 });

@@ -2,33 +2,28 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, TextInput, StyleSheet,
   Animated, Easing, PanResponder, ViewStyle, TextStyle,
-  Platform, ActivityIndicator,
+  Platform, ActivityIndicator, Image,
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { T, Fonts, Radius, Shadow } from '../../constants/tokens';
+import { T, Fonts, Radius, Shadow, ERROR_TYPES } from '../../constants/tokens';
 import { FlagUS, FlagUK, FlameIcon, EchoLogoMark, IconHome, IconMic, IconChart } from './icons';
 
 // ── EchoLogo ──────────────────────────────────────────────────
-export function EchoLogo({ size = 32 }: { size?: number }) {
-  const boxSize = Math.round(size);
-  const br = Math.round(boxSize * 0.34);
+export function EchoLogo({ size = 23 }: { size?: number }) {
+  const width = Math.round(size * 2.8);
+  const height = Math.round(size * .75);
+
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9 }}>
-      <View style={{
-        width: boxSize, height: boxSize, borderRadius: br,
-        backgroundColor: T.rose600,
-        alignItems: 'center', justifyContent: 'center',
-        shadowColor: T.rose600, shadowOffset: { width: 0, height: 3 },
-        shadowOpacity: 0.32, shadowRadius: 12, elevation: 6,
-      }}>
-        <EchoLogoMark size={boxSize} />
-      </View>
-      <Text style={{ fontFamily: Fonts.extrabold, fontSize: Math.round(boxSize * 0.72), color: T.charcoal, letterSpacing: -0.7 }}>
-        Echo
-      </Text>
-    </View>
+    <Image
+      source={require('../../assets/logo.png')}
+      style={{
+        width,
+        height,
+        resizeMode: 'contain',
+      }}
+    />
   );
 }
 
@@ -368,15 +363,6 @@ export function CorrectionCard({
   correction: CorrectionData;
   onDismiss: () => void;
 }) {
-  const ERROR_TYPES: Record<string, { color: string; bg: string; label: string }> = {
-    TENSE:       { color: '#F59E0B', bg: '#FEF3C7', label: 'Tense' },
-    ARTICLE:     { color: '#0EA5E9', bg: '#E0F2FE', label: 'Article' },
-    PREPOSITION: { color: '#8B5CF6', bg: '#EDE9FE', label: 'Preposition' },
-    COLLOCATION: { color: '#F43F8E', bg: '#FCE7F3', label: 'Collocation' },
-    AGREEMENT:   { color: '#F97316', bg: '#FEF0E6', label: 'Agreement' },
-    VOCAB:       { color: '#6366F1', bg: '#EEF2FF', label: 'Vocabulary' },
-    FILLER:      { color: '#0D9488', bg: '#F0FDFA', label: 'Filler word' },
-  };
   const cfg = ERROR_TYPES[correction.type] || { color: T.rose600, bg: T.rose50, label: correction.type };
 
   const translateY = useRef(new Animated.Value(300)).current;
@@ -486,7 +472,7 @@ const styles = StyleSheet.create({
   streakText: { fontFamily: Fonts.semibold, fontSize: 13, color: '#92400E' },
 
   // MicroLabel
-  microLabel: { fontFamily: Fonts.bold, fontSize: 10, color: T.muted, letterSpacing: 1.2, textTransform: 'uppercase' },
+  microLabel: { fontFamily: Fonts.bold, fontSize: 10, color: T.charcoal, letterSpacing: 1.2, textTransform: 'uppercase' },
 
   // SectionHeader
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
@@ -553,11 +539,8 @@ export function BottomTabBar({ active }: { active: BottomTab }) {
     if (id === 'home') {
       router.replace('/(app)');
     } else if (id === 'session') {
-      // Default to IELTS Training when launching from the FAB
-      router.push({
-        pathname: '/(app)/pre-session',
-        params: { modeId: 'IELTS Training', mode: 'training' },
-      } as any);
+      // Launch a new speaking session
+      router.push('/(app)/session');
     } else if (id === 'progress') {
       router.push('/(app)/history');
     }

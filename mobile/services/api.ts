@@ -12,7 +12,7 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
   return { Authorization: `Bearer ${session.access_token}` };
 }
 
-async function request(method: string, path: string, body?: object): Promise<any> {
+async function request(method: string, path: string, body?: Record<string, unknown>): Promise<any> {
   const headers = await getAuthHeaders();
   const res = await fetch(`${BASE_URL}${path}`, {
     method,
@@ -32,9 +32,9 @@ async function request(method: string, path: string, body?: object): Promise<any
 }
 
 export const api = {
-  get:    (path: string)                => request('GET',    path),
-  post:   (path: string, body: object)  => request('POST',   path, body),
-  put:    (path: string, body: object)  => request('PUT',    path, body),
-  patch:  (path: string, body: object)  => request('PATCH',  path, body),
-  delete: (path: string)                => request('DELETE', path),
+  get: (path: string) => request('GET', path),
+  post: (path: string, body: Record<string, unknown>) => request('POST', path, body),
+  put: (path: string, body: Record<string, unknown>) => request('PUT', path, body),
+  patch: (path: string, body: Record<string, unknown>) => request('PATCH', path, body),
+  delete: (path: string) => request('DELETE', path),
 };
