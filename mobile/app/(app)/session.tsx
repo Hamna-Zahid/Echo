@@ -30,7 +30,7 @@ export default function SessionScreen() {
   // DEV MODE (REMOVE BEFORE PRODUCTION)
   // ======================================================
 
-  const DEV_MODE = true;
+  const DEV_MODE = false;
 
   // Available:
   // 'connecting'
